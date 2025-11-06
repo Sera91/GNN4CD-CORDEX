@@ -1,4 +1,4 @@
-#Instructions
+# Instructions
 
-##Setting 
+## Setting enviroment
 To run the model training/inference
