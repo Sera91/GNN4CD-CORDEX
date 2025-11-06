@@ -34,3 +34,6 @@ This config should be locate where is the ACCELERATE CACHE directory.
 In parallel you need to create a wandb account, and add to the config (for preprocessing, training or inference)
 your wandb API key and user name
 
+For the training of the model
+
+bash run.sh configs/
