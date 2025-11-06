@@ -36,4 +36,4 @@ your wandb API key and user name
 
 For the training of the model
 
-bash run.sh configs/
+bash run.sh config/train_Rall
