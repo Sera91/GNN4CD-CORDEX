@@ -1,0 +1,7 @@
+{"time":"2025-11-06T00:30:29.428970861+01:00","level":"INFO","msg":"stream: starting","core version":"0.19.8","symlink path":"/leonardo_work/ICT25_ESP/vblasone/GNN4CD/wandb/offline-run-20251106_003029-6viveclk/logs/debug-core.log"}
+{"time":"2025-11-06T00:30:29.559700527+01:00","level":"INFO","msg":"created new stream","id":"6viveclk"}
+{"time":"2025-11-06T00:30:29.55975623+01:00","level":"INFO","msg":"stream: started","id":"6viveclk"}
+{"time":"2025-11-06T00:30:29.559914679+01:00","level":"INFO","msg":"handler: started","stream_id":"6viveclk"}
+{"time":"2025-11-06T00:30:29.559948786+01:00","level":"INFO","msg":"writer: Do: started","stream_id":"6viveclk"}
+{"time":"2025-11-06T00:30:29.560384618+01:00","level":"INFO","msg":"sender: started","stream_id":"6viveclk"}
+{"time":"2025-11-06T00:30:29.563414103+01:00","level":"INFO","msg":"Starting system monitor"}
