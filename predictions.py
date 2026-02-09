@@ -263,7 +263,7 @@ if __name__ == '__main__':
         elif args.model_type == "R":
             pr_R = accelerator.gather(pr_R)
         elif args.model_type == "Rall":
-            pr_Rall = accelerator.gather(pr_R)
+            pr_Rall = accelerator.gather(pr_Rall)
         elif args.model_type == "C":
             pr_C = accelerator.gather(pr_C)
 
