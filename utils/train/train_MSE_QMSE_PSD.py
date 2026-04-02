@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import numpy as np
 import pickle
 import time
@@ -43,16 +42,11 @@ class MSE_QMSE_PSD_Trainer(object):
         write_log(f"\nStart training the regressor.", args, accelerator, 'a')
 
         step = 0
-        mse_loss_fn = nn.MSELoss()
-        psd_loss_fn = PSDLoss(use_mse=False, apply_expm1=True)
-        alpha = args.alpha
-        lambda_mse = 1.0
-        lambda_psd = 0.005
         
         for epoch in range(epoch_start, epoch_start+args.epochs):
 
             model.train()
-            write_log(f"\nEpoch {epoch} --- learning rate {optimizer.param_groups[0]['lr']:.8f}, alpha: {alpha}", args, accelerator, 'a')
+            write_log(f"\nEpoch {epoch} --- learning rate {optimizer.param_groups[0]['lr']:.8f}, alpha: {args.alpha}, beta: {args.beta}", args, accelerator, 'a')
             
             # Define objects to track meters
             loss_meter = AverageMeter()
@@ -76,10 +70,8 @@ class MSE_QMSE_PSD_Trainer(object):
                 train_mask = graph['high'].train_mask
                 y = graph['high'].y
 
-                loss_mse = mse_loss_fn(y_pred[train_mask].flatten(), y[train_mask].flatten())
-                loss_qmse = loss_fn(y_pred[train_mask].flatten(), y[train_mask].flatten(), w[train_mask].flatten())
-                loss_psd = psd_loss_fn(y_pred, y)
-                loss = lambda_mse * loss_mse + alpha * loss_qmse + lambda_psd * loss_psd
+                loss, loss_mse, loss_qmse, loss_psd = loss_fn(
+                    y_pred[train_mask].flatten(), y[train_mask].flatten(), w[train_mask].flatten())
 
                 optimizer.zero_grad()
                 accelerator.backward(loss)
@@ -147,10 +139,8 @@ class MSE_QMSE_PSD_Trainer(object):
                         train_mask = train_mask.view(B, n_nodes)
                         w = w.view(B, n_nodes)
 
-                        loss_mse = mse_loss_fn(y_pred[train_mask].flatten(), y[train_mask].flatten())
-                        loss_qmse = loss_fn(y_pred[train_mask].flatten(), y[train_mask].flatten(), w[train_mask].flatten())
-                        loss_psd = psd_loss_fn(y_pred, y)
-                        loss = lambda_mse * loss_mse + alpha * loss_qmse + lambda_psd * loss_psd
+                        loss, loss_mse, loss_qmse, loss_psd = loss_fn(
+                            y_pred[train_mask].flatten(), y[train_mask].flatten(), w[train_mask].flatten())
 
                         # Log values to wandb
                         val_loss_meter.update(val=loss.item(), n=y_pred.shape[0])

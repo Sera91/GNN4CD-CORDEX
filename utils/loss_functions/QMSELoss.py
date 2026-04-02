@@ -2,9 +2,8 @@ import torch
 import torch.nn as nn
 
 
-class QMSE():
+class QMSELoss(nn.Module):
     def __init__(self, balance=None):
-        self.mse_loss = nn.MSELoss()
         self.balance = balance
 
     def __call__(self, prediction_batch, target_batch, bins):
