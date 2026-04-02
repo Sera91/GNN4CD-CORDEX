@@ -35,7 +35,8 @@ class MSE_QMSE_PSD_Trainer(object):
             times,
             accelerator,
             args,
-            epoch_start=0):
+            epoch_start=0,
+            log_val_plots=True):
         
         write_log(f"\nStart training the regressor.", args, accelerator, 'a')
 
@@ -113,9 +114,10 @@ class MSE_QMSE_PSD_Trainer(object):
                 model.eval()
 
                 # if epoch%5==0:
-                y_pred_list = []
-                y_list = []
-                idxs_list = []
+                if log_val_plots:
+                    y_pred_list = []
+                    y_list = []
+                    idxs_list = []
 
                 with torch.no_grad():    
                     for graph in dataloader_val:
@@ -153,22 +155,24 @@ class MSE_QMSE_PSD_Trainer(object):
                         }, step=step)
                         
                         # if epoch%5==0:
-                        y_pred = torch.atleast_2d(y_pred) # from (N,) to (1,N)
-                        y = torch.atleast_2d(y)
-                        idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
-                        y_pred_list.append(y_pred) # time, nodes
-                        y_list.append(y)
-                        idxs_list.append(idxs)                    
+                        if log_val_plots:
+                            y_pred = torch.atleast_2d(y_pred) # from (N,) to (1,N)
+                            y = torch.atleast_2d(y)
+                            idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
+                            y_pred_list.append(y_pred) # time, nodes
+                            y_list.append(y)
+                            idxs_list.append(idxs)                    
 
                     ###### PLOTS ######
-                    # if epoch%5==0:
-                    # Gather from all processes for metrics
-                    y_pred_all = accelerator.gather(torch.stack(y_pred_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
-                    y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]
-                    idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]
 
-                    # Create a few plots to compare
-                    self._create_plots_reg(y_pred_all, y_all, idxs_all, times, graph, accelerator, step, epoch, args)
+                    # if epoch%5==0:
+                    if log_val_plots:
+                        y_pred_all = accelerator.gather(torch.stack(y_pred_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
+                        y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]
+                        idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]
+
+                        # Create a few plots to compare
+                        self._create_plots_reg(y_pred_all, y_all, idxs_all, times, graph, accelerator, step, epoch, args)
                             
                 accelerator.log({
                     'epoch':epoch,

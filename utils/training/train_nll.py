@@ -34,7 +34,8 @@ class NLL_Trainer(object):
             times,
             accelerator,
             args,
-            epoch_start=0):
+            epoch_start=0,
+            log_val_plots=True):
         
         write_log(f"\nStart training the regressor.", args, accelerator, 'a')
 
@@ -97,9 +98,10 @@ class NLL_Trainer(object):
                 model.eval()
 
                 # if epoch%5==0:
-                mu_pred_list = []
-                y_list = []
-                idxs_list = []
+                if log_val_plots:
+                    mu_pred_list = []
+                    y_list = []
+                    idxs_list = []
 
                 with torch.no_grad():    
                     for graph in dataloader_val:
@@ -127,20 +129,22 @@ class NLL_Trainer(object):
                             'val loss avg': val_loss_meter.avg
                         }, step=step)
                         
-                        mu_pred = torch.atleast_2d(mu_pred) # from (N,) to (1,N)
-                        y = torch.atleast_2d(y)
-                        idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
-                        mu_pred_list.append(mu_pred) # time, nodes
-                        y_list.append(y)
-                        idxs_list.append(idxs)     
+                        if log_val_plots:
+                            mu_pred = torch.atleast_2d(mu_pred) # from (N,) to (1,N)
+                            y = torch.atleast_2d(y)
+                            idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
+                            mu_pred_list.append(mu_pred) # time, nodes
+                            y_list.append(y)
+                            idxs_list.append(idxs)     
 
                     ###### PLOTS ######
-                    mu_pred_all = accelerator.gather(torch.stack(mu_pred_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
-                    y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]
-                    idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]
+                    if log_val_plots:
+                        mu_pred_all = accelerator.gather(torch.stack(mu_pred_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
+                        y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]
+                        idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]
 
-                    # Create a few plots to compare
-                    self._create_plots_reg(mu_pred_all, y_all, idxs_all, times, graph, accelerator, step, epoch, args)
+                        # Create a few plots to compare
+                        self._create_plots_reg(mu_pred_all, y_all, idxs_all, times, graph, accelerator, step, epoch, args)
                             
                 accelerator.log({
                     'epoch':epoch,
