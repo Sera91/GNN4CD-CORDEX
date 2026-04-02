@@ -18,7 +18,6 @@ from data.loaders.netcdf_loader import read_dataset
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 #-- paths
-parser.add_argument('--input_path_phase_2', type=str, help='path to input directory')
 parser.add_argument('--output_path', type=str)
 parser.add_argument('--log_file', type=str)
 parser.add_argument('--input_path_target', type=str)
@@ -43,7 +42,6 @@ parser.add_argument('--lon_grid_radius_low', type=float, default=0.36)
 parser.add_argument('--lat_grid_radius_low', type=float, default=0.36)
 
 #-- other
-parser.add_argument('--suffix_phase_2', type=str, default='')
 parser.add_argument('--mask_path', type=str, default=None)
 parser.add_argument('--mask_file', type=str, default=None)
 parser.add_argument('--predictors_dataset', type=str)
@@ -315,7 +313,7 @@ write_log(f"\n-- 6. Coords ij", args, accelerator=None, mode='a')
 np.save(args.output_path+"coords_ij.npy", mask_sealand)
 
 write_log(f"\n-- 7. Graph", args, accelerator=None, mode='a')
-with open(args.output_path + 'low_high_graph' + args.suffix_phase_2 + '.pkl', 'wb') as f:
+with open(args.output_path + 'low_high_graph.pkl', 'wb') as f:
     pickle.dump(low_high_graph, f)
 
 write_log(f"\n-- 8. High time index file.", args, accelerator=None, mode='a')
