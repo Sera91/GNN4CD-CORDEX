@@ -9,15 +9,14 @@ import importlib
 import json
 import random
 
-from utils.loss_functions.MSE_QMSE_PSD_Loss import MSE_QMSE_PSD_Loss
-from utils.loss_functions.GaussianNLLLoss import GaussianNLLLoss
-from utils.tools import write_log, check_freezed_layers, set_seed_everything
-from utils.tools import find_not_all_nan_times, derive_train_val_idxs, derive_train_val_idxs_years_list
-from utils.tools import compute_input_statistics_and_standardize, derive_qmse_bins
-from utils.tools import prepare_target_for_train
-from utils.train_test import Trainer
-from utils.train_NLL import NLL_Trainer
-from utils.train_MSE_QMSE_PSD import MSE_QMSE_PSD_Trainer
+from utils.loss_functions.mse_qmse_psd import MSE_QMSE_PSD_Loss
+from utils.loss_functions.gaussian_nll import GaussianNLLLoss
+from utils.helpers.tools import write_log, check_freezed_layers, set_seed_everything
+from utils.helpers.tools import find_not_all_nan_times, derive_train_val_idxs, derive_train_val_idxs_years_list
+from utils.helpers.tools import compute_input_statistics_and_standardize, derive_qmse_bins
+from utils.helpers.tools import prepare_target_for_train
+from utils.training.train_nll import NLL_Trainer
+from utils.training.train_mse_qmse_psd import MSE_QMSE_PSD_Trainer
 from accelerate import Accelerator
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -34,9 +33,6 @@ parser.add_argument('--target_file', type=str, default=None)
 parser.add_argument('--graph_file', type=str, default=None) 
 parser.add_argument('--coords_ij_file', type=str, default=None)
 
-parser.add_argument('--out_checkpoint_file', type=str, default="checkpoint.pth")
-parser.add_argument('--out_loss_file', type=str, default="loss.csv")
-
 parser.add_argument('--use_accelerate',  action='store_true')
 parser.add_argument('--no-use_accelerate', dest='use_accelerate', action='store_false')
 parser.add_argument('--wandb_project_name', type=str)
@@ -44,7 +40,6 @@ parser.add_argument('--wandb_project_name', type=str)
 parser.add_argument('--metadata_file', type=str, help='metadata file')
 
 #-- training hyperparameters
-parser.add_argument('--pct_trainset', type=float, default=1.0, help='percentage of dataset in trainset')
 parser.add_argument('--epochs', type=int, default=15, help='number of total training epochs')
 parser.add_argument('--batch_size', type=int, default=64, help='batch size (global)')
 parser.add_argument('--step_size', type=int, default=10, help='scheduler step size (global)')
@@ -62,8 +57,9 @@ parser.add_argument('--no-ctd_training', dest='ctd_training', action='store_fals
 parser.add_argument('--make_val_plots', action='store_true')
 parser.add_argument('--no-make_val_plots', dest='make_val_plots', action='store_false')
 
-parser.add_argument('--loss_fn', type=str, default="mse_loss")
+parser.add_argument('--loss_fn', type=str)
 parser.add_argument('--alpha', type=float, default=None)
+parser.add_argument('--beta', type=float, default=None)
 parser.add_argument('--seed', type=int)
 parser.add_argument('--n_gpu', type=int, default=4)
 
@@ -211,6 +207,8 @@ if __name__ == '__main__':
         loss_fn = MSE_QMSE_PSD_Loss(alpha=args.alpha, beta=args.beta)
     elif args.loss_fn == "GaussianNLLLoss":
         loss_fn = GaussianNLLLoss()
+    else:
+        raise Exception(f"The provided loss: {args.loss_fn} is not implemented.")
 
 #--------------------------------------------------------
 #--------------------  PREPROCESSING --------------------
@@ -268,9 +266,9 @@ if __name__ == '__main__':
             train_idxs_valid_subset,
             args,
             accelerator,
-            BINMIN=BINMIN,
-            BINMAX=BINMAX,
-            BINWIDTH=BINWIDTH
+            binmin=BINMIN,
+            binmax=BINMAX,
+            binwidth=BINWIDTH
         )
         
     #-- Step 5 - Compute input statistics + standardize
@@ -454,7 +452,7 @@ if __name__ == '__main__':
 #-----------------------------------------------------
 
     
-    write_log(f"\nUsing pct_trainset={args.pct_trainset}, lr={optimizer.param_groups[0]['lr']:.8f}, " +
+    write_log(f"\nUsing lr={optimizer.param_groups[0]['lr']:.8f}, " +
                 f"weight decay = {args.weight_decay} and epochs={args.epochs}." + 
                 f"\nloss: {loss_fn}", args, accelerator, 'a') 
     if accelerator is None:
@@ -466,12 +464,10 @@ if __name__ == '__main__':
 
     val_size = len(dataset_graph_val)
 
-    if "NLL" in args.model_name:
+    if args.loss_fn == "GaussianNLLLoss":
         train_fn = NLL_Trainer().train_reg
     elif args.loss_fn == "MSE_QMSE_PSD_Loss":
         train_fn = MSE_QMSE_PSD_Trainer().train_reg
-    else:
-        train_fn = Trainer().train_reg
 
     train_fn(
         model,

@@ -4,7 +4,9 @@ import torch.nn as nn
 
 class QMSELoss(nn.Module):
     def __init__(self, balance=None):
+        super().__init__()
         self.balance = balance
+        self.mse_loss = nn.MSELoss()
 
     def __call__(self, prediction_batch, target_batch, bins):
         loss_quantized = 0

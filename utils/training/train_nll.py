@@ -3,14 +3,14 @@ import numpy as np
 import pickle
 import time
 import wandb
-from utils.metrics import AverageMeter
-from utils.tools import write_log
-from utils.plots_new import plot_maps, plot_pdf, get_cmap_dict
+from utils.metrics.metrics import AverageMeter
+from utils.helpers.tools import write_log
+from utils.plotting.plots import plot_maps, plot_pdf, get_cmap_dict
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import matplotlib
 import json
-from utils.tools import convert_dict
+from utils.helpers.tools import convert_dict
 from torch_geometric.data import HeteroData
 
 #-----------------------------------------------------
@@ -89,8 +89,8 @@ class NLL_Trainer(object):
                 f"Loss - total: {loss_meter.sum:.4f} - average: {loss_meter.avg:.10f}. ", args, accelerator, 'a'
             )
                     
-            accelerator.save_state(output_dir=args.output_path+f"checkpoint_{epoch}/", safe_serialization=False)
-            torch.save({"epoch": epoch}, args.output_path+f"checkpoint_{epoch}/epoch")
+            accelerator.save_state(output_dir=args.output_path+f"checkpoints/checkpoint_{epoch}/", safe_serialization=False)
+            torch.save({"epoch": epoch}, args.output_path+f"checkpoints/checkpoint_{epoch}/epoch")
 
             # VALIDATION
             if dataloader_val is not None:
