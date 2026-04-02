@@ -22,6 +22,134 @@ class NLL_Trainer(object):
     def __init__(self):
         super(NLL_Trainer, self).__init__()
 
+    def train_reg(
+            self,
+            model,
+            dataloader_train,
+            dataloader_val,
+            optimizer,
+            loss_fn,
+            lr_scheduler,
+            val_size,
+            times,
+            accelerator,
+            args,
+            epoch_start=0):
+        
+        write_log(f"\nStart training the regressor.", args, accelerator, 'a')
+
+        step = 0
+        
+        for epoch in range(epoch_start, epoch_start+args.epochs):
+
+            model.train()
+            write_log(f"\nEpoch {epoch} --- learning rate {optimizer.param_groups[0]['lr']:.8f}", args, accelerator, 'a')
+            
+            # Define objects to track meters
+            loss_meter = AverageMeter()
+            val_loss_meter = AverageMeter()
+
+            start = time.time()
+            
+            # TRAIN
+            for i, graph in enumerate(dataloader_train):
+
+                # Get target and mask from graph
+                train_mask = graph['high'].train_mask
+                y = graph["high"].y
+
+                mu_pred, sigma_pred = model(graph)
+                loss = loss_fn(mu_pred.flatten(), sigma_pred.flatten(), y.flatten())
+                
+                optimizer.zero_grad()
+                accelerator.backward(loss)
+                #accelerator.clip_grad_norm_(model.parameters(), 5)
+                optimizer.step()
+                step += 1
+                
+                # Log values to wandb
+                loss_meter.update(val=loss.item(), n=mu_pred.shape[0])
+                
+                accelerator.log({
+                    'epoch':epoch,
+                    'train loss iteration': loss_meter.val,
+                    'train loss avg': loss_meter.avg,
+                }, step=step)
+
+            end = time.time()
+
+            accelerator.log({
+                'epoch':epoch,
+                'train loss avg': loss_meter.avg,
+                'lr': np.mean(lr_scheduler.get_last_lr())
+            }, step=step)
+
+            write_log(
+                f"\nEpoch {epoch} completed in {end - start:.4f} seconds." +
+                f"Loss - total: {loss_meter.sum:.4f} - average: {loss_meter.avg:.10f}. ", args, accelerator, 'a'
+            )
+                    
+            accelerator.save_state(output_dir=args.output_path+f"checkpoint_{epoch}/", safe_serialization=False)
+            torch.save({"epoch": epoch}, args.output_path+f"checkpoint_{epoch}/epoch")
+
+            # VALIDATION
+            if dataloader_val is not None:
+                model.eval()
+
+                # if epoch%5==0:
+                mu_pred_list = []
+                y_list = []
+                idxs_list = []
+
+                with torch.no_grad():    
+                    for graph in dataloader_val:
+                        
+                        # Get target and mask from graph
+                        train_mask = graph['high'].train_mask
+                        y = graph["high"].y
+
+                        mu_pred, sigma_pred = model(graph) # mu, phi if tweedie loss
+                        loss = loss_fn(mu_pred.flatten(), sigma_pred.flatten(), y.flatten())
+                
+                        # retrieve graphs for individual time instances
+                        n_nodes = graph["high"].num_nodes
+                        y_split = torch.split(y, n_nodes)
+                        mu_pred_split = torch.split(mu_pred, n_nodes)
+                        train_mask_split = torch.split(train_mask, n_nodes)
+                        y = torch.stack(y_split, dim=0).squeeze(-1)  # (n_nodes, T, ...)
+                        mu_pred = torch.stack(mu_pred_split, dim=0).squeeze(-1)  # (n_nodes, T, ...)
+                        train_mask = torch.stack(train_mask_split, dim=0).squeeze(-1) # (n_nodes, T, ...)
+
+                        val_loss_meter.update(val=loss.item(), n=mu_pred.shape[0])
+                        accelerator.log({
+                            'epoch':epoch,
+                            'val loss iteration': val_loss_meter.val,
+                            'val loss avg': val_loss_meter.avg
+                        }, step=step)
+                        
+                        mu_pred = torch.atleast_2d(mu_pred) # from (N,) to (1,N)
+                        y = torch.atleast_2d(y)
+                        idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
+                        mu_pred_list.append(mu_pred) # time, nodes
+                        y_list.append(y)
+                        idxs_list.append(idxs)     
+
+                    ###### PLOTS ######
+                    mu_pred_all = accelerator.gather(torch.stack(mu_pred_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
+                    y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]
+                    idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]
+
+                    # Create a few plots to compare
+                    self._create_plots_reg(mu_pred_all, y_all, idxs_all, times, graph, accelerator, step, epoch, args)
+                            
+                accelerator.log({
+                    'epoch':epoch,
+                    'val loss avg': val_loss_meter.avg,
+                }, step=step)
+                    
+            if lr_scheduler is not None:
+                lr_scheduler.step()  
+
     def _create_plots_reg(self, y_pred, y, t, times, graph, accelerator, step, epoch, args):
 
         if "CORDEXML" in args.run_type:
@@ -198,131 +326,3 @@ class NLL_Trainer(object):
 
             with open(args.output_path + f"output_graph_{args.validation_year}.pkl", 'wb') as f:
                 pickle.dump(data, f)
-
-    def train_reg(
-            self,
-            model,
-            dataloader_train,
-            dataloader_val,
-            optimizer,
-            loss_fn,
-            lr_scheduler,
-            val_size,
-            times,
-            accelerator,
-            args,
-            epoch_start=0):
-        
-        write_log(f"\nStart training the regressor.", args, accelerator, 'a')
-
-        step = 0
-        
-        for epoch in range(epoch_start, epoch_start+args.epochs):
-
-            model.train()
-            write_log(f"\nEpoch {epoch} --- learning rate {optimizer.param_groups[0]['lr']:.8f}", args, accelerator, 'a')
-            
-            # Define objects to track meters
-            loss_meter = AverageMeter()
-            val_loss_meter = AverageMeter()
-
-            start = time.time()
-            
-            # TRAIN
-            for i, graph in enumerate(dataloader_train):
-
-                # Get target and mask from graph
-                train_mask = graph['high'].train_mask
-                y = graph["high"].y
-
-                mu_pred, sigma_pred = model(graph)
-                loss = loss_fn(mu_pred.flatten(), sigma_pred.flatten(), y.flatten())
-                
-                optimizer.zero_grad()
-                accelerator.backward(loss)
-                #accelerator.clip_grad_norm_(model.parameters(), 5)
-                optimizer.step()
-                step += 1
-                
-                # Log values to wandb
-                loss_meter.update(val=loss.item(), n=mu_pred.shape[0])
-                
-                accelerator.log({
-                    'epoch':epoch,
-                    'train loss iteration': loss_meter.val,
-                    'train loss avg': loss_meter.avg,
-                }, step=step)
-
-            end = time.time()
-
-            accelerator.log({
-                'epoch':epoch,
-                'train loss avg': loss_meter.avg,
-                'lr': np.mean(lr_scheduler.get_last_lr())
-            }, step=step)
-
-            write_log(
-                f"\nEpoch {epoch} completed in {end - start:.4f} seconds." +
-                f"Loss - total: {loss_meter.sum:.4f} - average: {loss_meter.avg:.10f}. ", args, accelerator, 'a'
-            )
-                    
-            accelerator.save_state(output_dir=args.output_path+f"checkpoint_{epoch}/", safe_serialization=False)
-            torch.save({"epoch": epoch}, args.output_path+f"checkpoint_{epoch}/epoch")
-
-            # VALIDATION
-            if dataloader_val is not None:
-                model.eval()
-
-                # if epoch%5==0:
-                mu_pred_list = []
-                y_list = []
-                idxs_list = []
-
-                with torch.no_grad():    
-                    for graph in dataloader_val:
-                        
-                        # Get target and mask from graph
-                        train_mask = graph['high'].train_mask
-                        y = graph["high"].y
-
-                        mu_pred, sigma_pred = model(graph) # mu, phi if tweedie loss
-                        loss = loss_fn(mu_pred.flatten(), sigma_pred.flatten(), y.flatten())
-                
-                        # retrieve graphs for individual time instances
-                        n_nodes = graph["high"].num_nodes
-                        y_split = torch.split(y, n_nodes)
-                        mu_pred_split = torch.split(mu_pred, n_nodes)
-                        train_mask_split = torch.split(train_mask, n_nodes)
-                        y = torch.stack(y_split, dim=0).squeeze(-1)  # (n_nodes, T, ...)
-                        mu_pred = torch.stack(mu_pred_split, dim=0).squeeze(-1)  # (n_nodes, T, ...)
-                        train_mask = torch.stack(train_mask_split, dim=0).squeeze(-1) # (n_nodes, T, ...)
-
-                        val_loss_meter.update(val=loss.item(), n=mu_pred.shape[0])
-                        accelerator.log({
-                            'epoch':epoch,
-                            'val loss iteration': val_loss_meter.val,
-                            'val loss avg': val_loss_meter.avg
-                        }, step=step)
-                        
-                        mu_pred = torch.atleast_2d(mu_pred) # from (N,) to (1,N)
-                        y = torch.atleast_2d(y)
-                        idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
-                        mu_pred_list.append(mu_pred) # time, nodes
-                        y_list.append(y)
-                        idxs_list.append(idxs)     
-
-                    ###### PLOTS ######
-                    mu_pred_all = accelerator.gather(torch.stack(mu_pred_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
-                    y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]
-                    idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]
-
-                    # Create a few plots to compare
-                    self._create_plots_reg(mu_pred_all, y_all, idxs_all, times, graph, accelerator, step, epoch, args)
-                            
-                accelerator.log({
-                    'epoch':epoch,
-                    'val loss avg': val_loss_meter.avg,
-                }, step=step)
-                    
-            if lr_scheduler is not None:
-                lr_scheduler.step()  
