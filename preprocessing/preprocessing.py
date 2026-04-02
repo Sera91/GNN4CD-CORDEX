@@ -316,7 +316,7 @@ write_log(f"\n-- 5. Mask sea-land", args, accelerator=None, mode='a')
 np.save(args.output_path+"mask_sealand.npy", mask_sealand)
 
 write_log(f"\n-- 6. Coords ij", args, accelerator=None, mode='a')
-np.save(args.output_path+"coords_ij.npy", mask_sealand)
+np.save(args.output_path+"coords_ij.npy", coords)
 
 write_log(f"\n-- 7. Graph", args, accelerator=None, mode='a')
 with open(args.output_path + 'low_high_graph.pkl', 'wb') as f:
