@@ -1,0 +1,60 @@
+#!/bin/bash
+
+#------------------#
+# SLURM PARAMETERS #
+#------------------#
+TIME="00:30:00"
+MEM="250G"
+JOB_NAME="tasmax-ALPS"
+LOG_PATH="/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/ESD_pseudo_reality/tasmax/train/"
+TARGET_TYPE="temperature"
+PREDICTORS_DATASET="CORDEXML"
+TARGET_DATASET="CORDEXML"
+
+#--------------------------#
+# OTHER GENERAL PARAMETERS #
+#--------------------------#
+ENV_PATH="/leonardo_work/ICT26_ESP/SHARED/GNN4CDenv"
+LOG_FILE="log.txt"
+SOURCE_PATH="/leonardo/home/userexternal/vblasone/.bashrc"
+MAIN_PATH="/leonardo_work/ICT26_ESP/vblasone/ICTP-GNN4CD"
+
+#-------------------------------#
+# CHOOSE PREP PHASES TO PERFORM #
+#-------------------------------#
+PERFORM_PHASE_1=false
+PERFORM_PHASE_2=true
+
+#---------------------------#
+# INPUT DATA TO PERSONALIZE #
+#---------------------------#
+# PHASE 2
+OUTPUT_PATH_PHASE_2=${LOG_PATH}
+OUTPUT_FILE_PHASE_2="low_high_graph.pkl"
+INPUT_PATH_PREDICTORS="/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/CORDEX-domains/ALPS_domain/train/ESD_pseudo_reality/predictors/"
+PREDICTORS_FILE="CNRM-CM5_1961-1980.nc"
+INPUT_PATH_TARGET="/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/CORDEX-domains/ALPS_domain/train/ESD_pseudo_reality/target/"
+TARGET_FILE="pr_tasmax_CNRM-CM5_1961-1980.nc"
+TARGET_MULTIPLIER=1.0
+
+INPUT_PATH_TOPO="/leonardo_work/ICT26_ESP/SHARED/TOPO/"
+TOPO_FILE="Static_fields_fixed.nc"
+
+INPUT_PATH_MASK_SEALAND="/leonardo_work/ICT26_ESP/SHARED/TOPO/"
+MASK_SEALAND_FILE="mask_sealand_CORDEXML.nc"
+
+LON_GRID_RADIUS_HIGH=0.25 # i.e. 0.25/8*2
+LAT_GRID_RADIUS_HIGH=0.15 # i.e. 0.25/10*2
+
+## north
+LON_MIN=6.75
+LON_MAX=14.00
+LAT_MIN=43.75
+LAT_MAX=47.00
+INTERVAL=0.25
+
+#--------------do not change here below------------------
+
+PHASE_1_PATH="${MAIN_PATH}/slice_and_merge_"${PREDICTORS_TYPE}".sh"
+PHASE_2_PYTHON_FILE="preprocessing_CORDEXML"
+
