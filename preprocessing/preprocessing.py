@@ -189,8 +189,12 @@ write_log(f"\n-- 1. Derive low-to-high edges", args, accelerator=None, mode='a')
 
 # 1. Low-to-high edges
 edges_low2high, edges_low2high_attr = derive_edge_index_multiscale(
-    lon_senders=lon_low, lat_senders=lat_low, lon_receivers=lon_high,
-    lat_receivers=lat_high, k=9, undirected=False, use_edge_attr=use_edge_attr_low)
+    lon_senders=lon_low,
+    lat_senders=lat_low,
+    lon_receivers=lon_high,
+    lat_receivers=lat_high,
+    k=9, undirected=False,
+    use_edge_attr=use_edge_attr_low)
 
 edges_low2high = torch.tensor(edges_low2high)
 
