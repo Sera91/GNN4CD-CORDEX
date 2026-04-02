@@ -168,8 +168,7 @@ target_high = target_high.swapaxes(0,1) # (num_nodes, time)
 lon_high = lon_high.flatten()
 lat_high = lat_high.flatten()
 orog = np.expand_dims(orog.flatten(), axis=-1)
-mask_sealand = np.expand_dims(mask_sealand.flatten(), axis=-1)
-coords = np.expand_dims(coords.flatten(), axis=-1)
+mask_sealand = np.expand_dims(mask_sealand.flatten(), axis=-1)+
 
 num_nodes_high = target_high.shape[0]
 
