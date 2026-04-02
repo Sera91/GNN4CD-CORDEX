@@ -10,8 +10,8 @@ from torch_geometric.data import HeteroData
 import torch_geometric.transforms as T
 transform = T.AddLaplacianEigenvectorPE(k=2)
 
-from utils.tools import write_log
-from utils.graph import derive_edge_index_within, derive_edge_index_multiscale
+from utils.tools.tools import write_log
+from utils.graph.graph import derive_edge_index_within, derive_edge_index_multiscale
 from data.loaders.complete_loader import load_dataset_CORDEXML
 from data.loaders.netcdf_loader import read_dataset
 
