@@ -17,7 +17,7 @@ TARGET_DATASET="CORDEXML"
 ENV_PATH="/leonardo_work/ICT26_ESP/SHARED/GNN4CDenv"
 LOG_FILE="log.txt"
 SOURCE_PATH="/leonardo/home/userexternal/vblasone/.bashrc"
-MAIN_PATH="/leonardo_work/ICT26_ESP/vblasone/ICTP-GNN4CD"
+MAIN_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML"
 
 #-------------------------------#
 # CHOOSE PREP PHASES TO PERFORM #
@@ -56,5 +56,5 @@ INTERVAL=0.25
 #--------------do not change here below------------------
 
 PHASE_1_PATH="${MAIN_PATH}/slice_and_merge_"${PREDICTORS_TYPE}".sh"
-PHASE_2_PYTHON_FILE="preprocessing_CORDEXML"
+PHASE_2_PYTHON_FILE="preprocessing"
 
