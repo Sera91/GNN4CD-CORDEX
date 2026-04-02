@@ -10,8 +10,8 @@ from torch_geometric.data import HeteroData
 import torch_geometric.transforms as T
 transform = T.AddLaplacianEigenvectorPE(k=2)
 
-from utils.tools.tools import write_log
-from utils.graph.graph import derive_edge_index_within, derive_edge_index_multiscale
+from utils.helpers.tools import write_log
+from data.structures.graph import derive_edge_index_within, derive_edge_index_multiscale
 from data.loaders.complete_loader import load_dataset_CORDEXML
 from data.loaders.netcdf_loader import read_dataset
 
@@ -73,7 +73,7 @@ load_dataset = load_dataset_CORDEXML
 ##---------- PREPROCESSING LOW RES DATA ------------##
 ######################################################
 
-write_log(f"#### Preprocesisng of the low resolution data.", args, accelerator=None, mode='w')
+write_log(f"#### Preprocessing of the low resolution data.", args, accelerator=None, mode='w')
 
 # Load the input dataset
 input_ds, lat_low, lon_low, low_time_index, low_native_time_res, low_time_res = load_dataset(
@@ -105,7 +105,7 @@ write_log(f'\nPreprocessing of low resolution data finished.', args, accelerator
 ##--------- PREPROCESSING HIGH RES DATA ------------##
 ######################################################
 
-write_log(f'\n\n#### Preprocesisng of the high resolution data.', args, accelerator=None, mode='a')
+write_log(f'\n\n#### Preprocessing of the high resolution data.', args, accelerator=None, mode='a')
 
 # 1. Target
 write_log(f"\n-- 1. TARGET ", args, accelerator=None, mode='a')
@@ -168,6 +168,8 @@ target_high = target_high.swapaxes(0,1) # (num_nodes, time)
 lon_high = lon_high.flatten()
 lat_high = lat_high.flatten()
 orog = np.expand_dims(orog.flatten(), axis=-1)
+mask_sealand = np.expand_dims(mask_sealand.flatten(), axis=-1)
+coords = np.expand_dims(coords.flatten(), axis=-1)
 
 num_nodes_high = target_high.shape[0]
 
