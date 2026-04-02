@@ -1,0 +1,9 @@
+import torch
+
+
+class GaussianNLLLoss():
+    def __init__(self):
+        super().__init__()
+
+    def __call__(mu, sigma, target):
+        return torch.mean(0.5 * ((target - mu)**2 / (sigma**2) + 2 * torch.log(sigma)))
