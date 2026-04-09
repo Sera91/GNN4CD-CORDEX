@@ -11,11 +11,13 @@ import random
 
 from utils.loss_functions.mse_qmse_psd import MSE_QMSE_PSD_Loss
 from utils.loss_functions.gaussian_nll import GaussianNLLLoss
+from utils.loss_functions.bernoulli_gamma_nll import BernoulliGammaNLLLoss
 from utils.helpers.tools import write_log, check_freezed_layers, set_seed_everything
 from utils.helpers.tools import find_not_all_nan_times, derive_train_val_idxs, derive_train_val_idxs_years_list
 from utils.helpers.tools import compute_input_statistics_and_standardize, derive_qmse_bins
 from utils.helpers.tools import prepare_target_for_train
 from utils.training.train_nll import NLL_Trainer
+from utils.training.train_bernoulli_gamma_nll import BernoulliGamma_NLL_Trainer
 from utils.training.train_mse_qmse_psd import MSE_QMSE_PSD_Trainer
 from accelerate import Accelerator
 
@@ -58,8 +60,8 @@ parser.add_argument('--make_val_plots', action='store_true')
 parser.add_argument('--no-make_val_plots', dest='make_val_plots', action='store_false')
 
 parser.add_argument('--loss_fn', type=str)
-parser.add_argument('--alpha', type=float, default=None)
-parser.add_argument('--beta', type=float, default=None)
+parser.add_argument('--alpha', type=float)
+parser.add_argument('--beta', type=float)
 parser.add_argument('--seed', type=int)
 parser.add_argument('--n_gpu', type=int, default=4)
 
@@ -73,21 +75,21 @@ parser.add_argument('--target_type', type=str)
 parser.add_argument('--run_type', type=str)
 
 #-- start and end training dates
-parser.add_argument('--train_year_start', type=int, default=None)
-parser.add_argument('--train_month_start', type=int, default=None)
-parser.add_argument('--train_day_start', type=int, default=None)
-parser.add_argument('--train_year_end', type=int, default=None)
-parser.add_argument('--train_month_end', type=int, default=None)
-parser.add_argument('--train_day_end', type=int, default=None)
-parser.add_argument('--validation_year', type=int, default=None)
+parser.add_argument('--train_year_start', type=str, default="")
+parser.add_argument('--train_month_start', type=str, default="")
+parser.add_argument('--train_day_start', type=str, default="")
+parser.add_argument('--train_year_end', type=str, default="")
+parser.add_argument('--train_month_end', type=str, default="")
+parser.add_argument('--train_day_end', type=str, default="")
+parser.add_argument('--validation_year', type=str, default="")
+# for random validation years
+parser.add_argument('--first_year', type=str, default="")
+parser.add_argument('--last_year', type=str, default="")
+parser.add_argument('--n_val_years', type=str, default="")
+# for lists of training and validation years
+parser.add_argument('--train_years', type=str, default="")
+parser.add_argument('--val_years', type=str, default="")
 
-parser.add_argument('--first_year', type=int, default=None)
-parser.add_argument('--last_year', type=int, default=None)
-parser.add_argument('--n_val_years', type=int, default=None)
-
-# parser.add_argument('--validation_year', type=lambda x : None if x == 'None' else int(x), default=None)
-
-import argparse
 
 ### PARAMETERS THAT ARE NOW SET MANUALLY
 THRESHOLD = 0.0
@@ -99,7 +101,7 @@ HISTORY_LENGTH_MAP = {
     "1h": 24,   # [t-24,...,t]
     "3h": 8,    # [t-24,t-21,...,t]
     "6h": 4,    # [t-24,t-18,t-12,t-6,t]
-    "1d": 2,    # [t-2,t-1,t]
+    "1d": 0,    # [t-2,t-1,t]
 }
 
 HIGH_INDEPENDENT_VARS=True
@@ -207,6 +209,8 @@ if __name__ == '__main__':
         loss_fn = MSE_QMSE_PSD_Loss(alpha=args.alpha, beta=args.beta)
     elif args.loss_fn == "GaussianNLLLoss":
         loss_fn = GaussianNLLLoss()
+    elif args.loss_fn == "BernoulliGammaNLLLoss":
+        loss_fn = BernoulliGammaNLLLoss()
     else:
         raise Exception(f"The provided loss: {args.loss_fn} is not implemented.")
 
@@ -214,33 +218,32 @@ if __name__ == '__main__':
 #--------------------  PREPROCESSING --------------------
 #--------------------------------------------------------
 
-    #-- Step 1 - Prepare target
-    target_prepared = prepare_target_for_train(target, args.target_type)
-
-    #-- Step 2 - Find valid time indices
-    idxs_not_all_nan = find_not_all_nan_times(target_prepared)
+    #-- Step 1 - Find valid time indices
+    idxs_not_all_nan = find_not_all_nan_times(target)
 
     write_log(f"\nAfter removing all nan time indexes, {len(idxs_not_all_nan)}" +
-        f" time indexes are considered ({(len(idxs_not_all_nan) / target_prepared.shape[1] * 100):.1f} % of initial ones).",
+        f" time indexes are considered ({(len(idxs_not_all_nan) / target.shape[1] * 100):.1f} % of initial ones).",
         args, accelerator, 'a')
 
-    #-- Step 3 - Compute train/val indices
-    if args.first_year == 0 or args.last_year == 0:
-        train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = derive_train_val_idxs(
-            args.train_year_start, args.train_month_start, args.train_day_start,
-            args.train_year_end, args.train_month_end, args.train_day_end,
+    #-- Step 2 - Compute train/val indices
+    # Case 1: the user provides lists of train years and val years
+    write_log(f"\nargs.train_years: {args.train_years.split(' ')}\nargs.val_years: {args.val_years.split(' ')}", args, accelerator, 'a')
+    if args.train_years != "" and args.val_years != "":
+        train_years = [int(y) for y in args.train_years.split(' ')]
+        val_years = [int(y) for y in args.val_years.split(' ')]
+        train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = derive_train_val_idxs_years_list(
+            train_years,
+            val_years,
             history_length=history_length,
             time_index=time_index,
-            idxs_not_all_nan=idxs_not_all_nan,
-            validation_year=args.validation_year,
             args=args,
             accelerator=accelerator
         )
-    else:
+    elif args.first_year != "" and args.last_year != "":
         # Build the full range
-        all_years = list(range(args.first_year, args.last_year + 1))
+        all_years = list(range(int(args.first_year), int(args.last_year) + 1))
         # Randomly sample validation years
-        val_years = random.sample(all_years, args.n_val_years)
+        val_years = random.sample(all_years, int(args.n_val_years))
         # Training years are the complement
         train_years = [y for y in all_years if y not in val_years]
         train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = derive_train_val_idxs_years_list(
@@ -251,6 +254,17 @@ if __name__ == '__main__':
             args=args,
             accelerator=accelerator
         )
+    else:
+        train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = derive_train_val_idxs(
+            int(args.train_year_start), int(args.train_month_start), int(args.train_day_start),
+            int(args.train_year_end), int(args.train_month_end), int(args.train_day_end),
+            history_length=history_length,
+            time_index=time_index,
+            idxs_not_all_nan=idxs_not_all_nan,
+            validation_year=int(args.validation_year),
+            args=args,
+            accelerator=accelerator
+        )
 
     np.save(args.output_path + "train_idxs.npy", train_idxs)
     np.save(args.output_path + "train_idxs_valid_subset.npy", train_idxs_valid_subset)
@@ -258,14 +272,31 @@ if __name__ == '__main__':
         np.save(args.output_path + "val_idxs.npy", val_idxs)
         np.save(args.output_path + "val_idxs_valid_subset.npy", val_idxs_valid_subset)
 
+    #-- Step 1 - Prepare target
+    if args.loss_fn == "BernoulliGammaNLLLoss":
+        target_prepared = target
+    else:
+        target_prepared = prepare_target_for_train(
+            target=target,
+            target_type=args.target_type,
+            train_idxs=train_idxs[train_idxs_valid_subset],
+            stats_path=args.output_path
+        )
+    
+    # bins_mm = np.concatenate([
+    #     np.array([0.0, 1.0]),          # dry vs wet
+    #     np.arange(1, 20, 2),           # 1–20 mm, 1 mm resolution
+    #     np.arange(20, 200, 10),         # coarser above
+    # ])
 
     #-- Step 4 - Compute QMSE bins
     if "QMSE" in args.loss_fn:
         target_bins = derive_qmse_bins(
             target_prepared,
-            train_idxs_valid_subset,
+            train_idxs[train_idxs_valid_subset],
             args,
             accelerator,
+            # bins=np.log1p(bins_mm)
             binmin=BINMIN,
             binmax=BINMAX,
             binwidth=BINWIDTH
@@ -278,7 +309,6 @@ if __name__ == '__main__':
             x_high=orog,
             train_idxs=train_idxs,
             n_vars=n_vars,
-            n_levels=n_levels,
             apply_stats=True,
             high_independent_vars=HIGH_INDEPENDENT_VARS,
             args=args,
@@ -400,7 +430,7 @@ if __name__ == '__main__':
         total_memory, used_memory, free_memory = map(int, os.popen('free -t -m').readlines()[-1].split()[1:])
         write_log(f"\nRAM memory {round((used_memory/total_memory) * 100, 2)} %", args, accelerator, 'a')
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     # optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     
     if args.lr_scheduler == "StepLR":
@@ -408,7 +438,7 @@ if __name__ == '__main__':
     elif args.lr_scheduler == "ReduceLROnPlateau":
         lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
     elif args.lr_scheduler == "CosineAnnealingLR":
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=0.000001, last_epoch=-1)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6, last_epoch=-1)
     else:
         lr_scheduler = None
 
@@ -466,6 +496,8 @@ if __name__ == '__main__':
 
     if args.loss_fn == "GaussianNLLLoss":
         train_fn = NLL_Trainer().train_reg
+    elif args.loss_fn == "BernoulliGammaNLLLoss":
+        train_fn = BernoulliGamma_NLL_Trainer().train_reg
     elif args.loss_fn == "MSE_QMSE_PSD_Loss":
         train_fn = MSE_QMSE_PSD_Trainer().train_reg
 

@@ -69,11 +69,13 @@ params = ['q', 't', 'u', 'v', 'z']
 levels = ['850', '700', '500']
 load_dataset = load_dataset_CORDEXML
 
+write_log(f"Input path: {args.input_path_predictors}", args, accelerator=None, mode='w')
+
 ######################################################
 ##---------- PREPROCESSING LOW RES DATA ------------##
 ######################################################
 
-write_log(f"#### Preprocessing of the low resolution data.", args, accelerator=None, mode='w')
+write_log(f"\n\n#### Preprocessing of the low resolution data.", args, accelerator=None, mode='a')
 
 # Load the input dataset
 input_ds, lat_low, lon_low, low_time_index, low_native_time_res, low_time_res = load_dataset(
@@ -109,28 +111,34 @@ write_log(f'\n\n#### Preprocessing of the high resolution data.', args, accelera
 
 # 1. Target
 write_log(f"\n-- 1. TARGET ", args, accelerator=None, mode='a')
-target_ds, high_new_time_index, high_time_res = read_dataset(args.input_path_target + args.target_file)
-write_log(f"Target time-resolution is {high_time_res} ... ", args, accelerator=None, mode='a')
+if args.target_file == "":
+    target_high = None
+    write_log(f"- ignoring", args, accelerator=None, mode='a')
+else:
+    target_ds, high_new_time_index, high_time_res = read_dataset(args.input_path_target + args.target_file)
+    write_log(f"Target time-resolution is {high_time_res} ... ", args, accelerator=None, mode='a')
 
-lon_high = target_ds.lon.to_numpy()
-lat_high = target_ds.lat.to_numpy()
+    if args.target_type == "precipitation":
+        target_high = target_ds.pr.to_numpy()
+    elif args.target_type == "temperature":
+        target_high = target_ds.tasmax.to_numpy()
 
-if args.target_type == "precipitation":
-    target_high = target_ds.pr.to_numpy()
-elif args.target_type == "temperature":
-    target_high = target_ds.tasmax.to_numpy()
+    if args.target_multiplier is not None: 
+        target_high *= args.target_multiplier
+        write_log(f'\n\tMultiplying pr by {args.target_multiplier} to get the correct unit.', args, accelerator=None, mode='a')
 
-if args.target_multiplier is not None: 
-    target_high *= args.target_multiplier
-    write_log(f'\n\tMultiplying pr by {args.target_multiplier} to get the correct unit.', args, accelerator=None, mode='a')
+    lon_high = target_ds.lon.to_numpy()
+    lat_high = target_ds.lat.to_numpy()
 
 # 2. Orography
 write_log(f"\n-- 2. OROGRAPHY ", args, accelerator=None, mode='a')
 orog_ds = xr.open_dataset(args.input_path_topo + args.topo_file)
 
 orog = orog_ds.orog.to_numpy()
-lon_orog = orog_ds.lon.to_numpy()
-lat_orog = orog_ds.lat.to_numpy()
+
+if target_high is None:
+    lon_high = orog_ds.lon.to_numpy()
+    lat_high = orog_ds.lat.to_numpy()
 
 # 3. Mask sea-land
 write_log(f"\n-- 3. MASK SEA-LAND ", args, accelerator=None, mode='a')
@@ -142,35 +150,36 @@ mask_sealand = mask_sealand_ds.z.to_numpy()
 write_log(f"\n-- 4. MATRIX COORDINATES ij ", args, accelerator=None, mode='a')
 i, j = np.meshgrid(
     np.arange(lon_high.shape[0]),
-    np.arange(lat_high.shape[0]),
+    np.arange(lon_high.shape[1]),
     indexing="ij"
 )
 
 i = 2.0 * i / (lon_high.shape[0] - 1) - 1.0 # normalise in [-1,1]
-j = 2.0 * j / (lat_high.shape[0] - 1) - 1.0
+j = 2.0 * j / (lon_high.shape[1] - 1) - 1.0
 
 coords = np.stack([i, j], axis=-1).reshape(-1, 2)
 np.save(args.output_path+"coords_ij.npy", coords)
 
 # 5. Land use
-write_log(f"\n-- 5. LAND USE - ignoring.", args, accelerator=None, mode='a')
+write_log(f"\n-- 5. LAND USE - ignoring", args, accelerator=None, mode='a')
 
-write_log(f"\n\nDone! Spatial domain is [{lon_high.min()}, {lon_high.max()}] x [{lat_high.min()}, {lat_high.max()}] with {target_high.shape[1]} nodes.", args, accelerator=None, mode='a')
-write_log(f"\nlon shape {lon_high.shape}, lat shape {lat_high.shape}, pr shape {target_high.shape}, orog shape {orog.shape}", args, accelerator=None, mode='a')
+write_log(f"\n\nDone! Spatial domain is [{lon_high.min()}, {lon_high.max()}] x [{lat_high.min()}, {lat_high.max()}].", args, accelerator=None, mode='a')
+write_log(f"\nlon shape {lon_high.shape}, lat shape {lat_high.shape}", args, accelerator=None, mode='a')
 
 ## Now reshape for PYG compatibility but keep track of original dims
-y_dim = target_high.shape[1] # time, x, y
-x_dim = target_high.shape[2]
+y_dim = lon_high.shape[0] # time, x, y
+x_dim = lon_high.shape[1]
 
-target_high = target_high.reshape(target_high.shape[0],-1) # (time, num_nodes)
-target_high = target_high.swapaxes(0,1) # (num_nodes, time)
+if target_high is not None:
+    target_high = target_high.reshape(target_high.shape[0],-1) # (time, num_nodes)
+    target_high = target_high.swapaxes(0,1) # (num_nodes, time)
 
 lon_high = lon_high.flatten()
 lat_high = lat_high.flatten()
 orog = np.expand_dims(orog.flatten(), axis=-1)
 mask_sealand = np.expand_dims(mask_sealand.flatten(), axis=-1)
 
-num_nodes_high = target_high.shape[0]
+num_nodes_high = lon_high.shape[0]
 
 write_log(f"\nThe high resolution graph has {num_nodes_high} nodes.", args, accelerator=None, mode='a')
 
@@ -281,20 +290,21 @@ write_log(f"\n-- 1. Writing the low input metadata file.", args, accelerator=Non
 with open(args.output_path+"low_input_metadata.json", "w") as f:
     json.dump(metadata_low, f, indent=4)
 
-metadata_target = {
-    "variables": "pr",
-    "time_res": high_time_res,
-    "time_range": [str(high_new_time_index[0]), str(high_new_time_index[-1])],
-    "native_time_res": high_time_res,
-    "lon-lat_dim (n_points)": len(lat_high),
-    "time_dim": len(high_new_time_index),
-    "lat_range": [float(lat_high.min()), float(lat_high.max())],
-    "lon_range": [float(lon_high.min()), float(lon_high.max())],
-}
+if target_high is not None:
+    metadata_target = {
+        "variables": "pr",
+        "time_res": high_time_res,
+        "time_range": [str(high_new_time_index[0]), str(high_new_time_index[-1])],
+        "native_time_res": high_time_res,
+        "lon-lat_dim (n_points)": len(lat_high),
+        "time_dim": len(high_new_time_index),
+        "lat_range": [float(lat_high.min()), float(lat_high.max())],
+        "lon_range": [float(lon_high.min()), float(lon_high.max())],
+    }
 
-write_log(f"\n-- 2. Writing the target metadata file.", args, accelerator=None, mode='a')
-with open(args.output_path+"target_metadata.json", "w") as f:
-    json.dump(metadata_target, f, indent=4)
+    write_log(f"\n-- 2. Writing the target metadata file.", args, accelerator=None, mode='a')
+    with open(args.output_path+"target_metadata.json", "w") as f:
+        json.dump(metadata_target, f, indent=4)
 
 #-- WRITING --#
 write_log(f"\n\n#### Save processed files", args, accelerator=None, mode='a')
@@ -305,8 +315,11 @@ np.save(args.output_path+"low_input.npy", low_input_upd)
 write_log(f"\n-- 2. Low time index file.", args, accelerator=None, mode='a')
 np.save(args.output_path+"time_index.npy", low_time_index)
 
-write_log(f"\n-- 3. Target", args, accelerator=None, mode='a')
-np.save(args.output_path+"target.npy", target_high)
+if target_high is not None:
+    write_log(f"\n-- 3. Target", args, accelerator=None, mode='a')
+    np.save(args.output_path+"target.npy", target_high)
+else:
+    write_log(f"\n-- 3. Target - ignoring", args, accelerator=None, mode='a')
 
 write_log(f"\n-- 4. Orography", args, accelerator=None, mode='a')
 np.save(args.output_path+"orog.npy", orog)
@@ -320,8 +333,10 @@ np.save(args.output_path+"coords_ij.npy", coords)
 write_log(f"\n-- 7. Graph", args, accelerator=None, mode='a')
 with open(args.output_path + 'low_high_graph.pkl', 'wb') as f:
     pickle.dump(low_high_graph, f)
-
-write_log(f"\n-- 8. High time index file.", args, accelerator=None, mode='a')
-np.save(args.output_path+"high_time_index.npy", high_new_time_index)
+if target_high is not None:
+    write_log(f"\n-- 8. High time index.", args, accelerator=None, mode='a')
+    np.save(args.output_path+"high_time_index.npy", high_new_time_index)
+else:
+    write_log(f"\n-- 8. High time index - ignoring", args, accelerator=None, mode='a')
 
 write_log(f"\n\n#### DONE!\nIn total, preprocessing took {time.time() - time_start} seconds", args, accelerator=None, mode='a')

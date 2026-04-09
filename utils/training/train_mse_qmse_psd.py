@@ -113,7 +113,6 @@ class MSE_QMSE_PSD_Trainer(object):
             if dataloader_val is not None:
                 model.eval()
 
-                # if epoch%5==0:
                 if log_val_plots:
                     y_pred_list = []
                     y_list = []
@@ -130,14 +129,6 @@ class MSE_QMSE_PSD_Trainer(object):
                         
                         y_pred = y_pred.squeeze()
                         y = y.squeeze()
-                
-                        # retrieve graphs for individual time instances
-                        n_nodes = graph["high"].num_nodes
-                        B = y.shape[0] // n_nodes
-                        y = y.view(B, n_nodes)
-                        y_pred = y_pred.view(B, n_nodes)
-                        train_mask = train_mask.view(B, n_nodes)
-                        w = w.view(B, n_nodes)
 
                         loss, loss_mse, loss_qmse, loss_psd = loss_fn(
                             y_pred[train_mask].flatten(), y[train_mask].flatten(), w[train_mask].flatten())
@@ -154,8 +145,15 @@ class MSE_QMSE_PSD_Trainer(object):
                             'val loss avg': val_loss_meter.avg
                         }, step=step)
                         
-                        # if epoch%5==0:
                         if log_val_plots:
+                            # retrieve graphs for individual time instances
+                            n_nodes = graph["high"].num_nodes
+                            B = y.shape[0] // n_nodes
+                            y = y.view(B, n_nodes)
+                            y_pred = y_pred.view(B, n_nodes)
+                            train_mask = train_mask.view(B, n_nodes)
+                            w = w.view(B, n_nodes)
+
                             y_pred = torch.atleast_2d(y_pred) # from (N,) to (1,N)
                             y = torch.atleast_2d(y)
                             idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
@@ -164,8 +162,6 @@ class MSE_QMSE_PSD_Trainer(object):
                             idxs_list.append(idxs)                    
 
                     ###### PLOTS ######
-
-                    # if epoch%5==0:
                     if log_val_plots:
                         y_pred_all = accelerator.gather(torch.stack(y_pred_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
                         y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]

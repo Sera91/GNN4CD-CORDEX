@@ -4,7 +4,7 @@ import pickle
 import time
 import wandb
 from utils.metrics.metrics import AverageMeter
-from utils.helpers.tools import write_log
+from utils.helpers.tools import write_log, invert_normalization
 from utils.plotting.plots import plot_maps, plot_pdf, get_cmap_dict
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
@@ -112,15 +112,6 @@ class NLL_Trainer(object):
 
                         mu_pred, sigma_pred = model(graph) # mu, phi if tweedie loss
                         loss = loss_fn(mu_pred.flatten(), sigma_pred.flatten(), y.flatten())
-                
-                        # retrieve graphs for individual time instances
-                        n_nodes = graph["high"].num_nodes
-                        y_split = torch.split(y, n_nodes)
-                        mu_pred_split = torch.split(mu_pred, n_nodes)
-                        train_mask_split = torch.split(train_mask, n_nodes)
-                        y = torch.stack(y_split, dim=0).squeeze(-1)  # (n_nodes, T, ...)
-                        mu_pred = torch.stack(mu_pred_split, dim=0).squeeze(-1)  # (n_nodes, T, ...)
-                        train_mask = torch.stack(train_mask_split, dim=0).squeeze(-1) # (n_nodes, T, ...)
 
                         val_loss_meter.update(val=loss.item(), n=mu_pred.shape[0])
                         accelerator.log({
@@ -130,6 +121,13 @@ class NLL_Trainer(object):
                         }, step=step)
                         
                         if log_val_plots:
+                            # retrieve graphs for individual time instances
+                            n_nodes = graph["high"].num_nodes
+                            B = y.shape[0] // n_nodes
+                            y = y.view(B, n_nodes)
+                            mu_pred = mu_pred.view(B, n_nodes)
+                            train_mask = train_mask.view(B, n_nodes)
+
                             mu_pred = torch.atleast_2d(mu_pred) # from (N,) to (1,N)
                             y = torch.atleast_2d(y)
                             idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
@@ -189,13 +187,11 @@ class NLL_Trainer(object):
             elif "CORDEXML" in args.run_type:
                 bins = np.arange(0,350,1).astype(np.float32)
         elif target_type == "temperature":
-            min_val_temp = 230
-            max_val_temp= 320
-            y_pred_plot = y_pred_plot * (max_val_temp - min_val_temp) + min_val_temp
-            y_plot = y_plot * (max_val_temp - min_val_temp) + min_val_temp
+            y_pred_plot = invert_normalization(y_pred_plot, stats_path=args.output_path)
+            y_plot = invert_normalization(y_plot, stats_path=args.output_path)
             y_pred_pdf = y_pred_plot.flatten()
             y_pdf = y_plot.flatten()
-            bins = np.arange(min_val_temp,max_val_temp,1).astype(np.float32)
+            bins = np.arange(230,320,1).astype(np.float32)
 
         cmap_dict = get_cmap_dict()
         bounds_avg = [0, 1, 1.5, 2, 4, 6, 8, 10, 12] #, 15, 20] #, 25, 30, 35]

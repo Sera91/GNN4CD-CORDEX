@@ -7,10 +7,10 @@ TIME="05:00:00"
 MEM="100G"
 JOB_NAME="gnll"
 MAIL="vblasone@ictp.it"
-LOG_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/tasmax/gaussian_nll/"
+LOG_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/tasmax/gaussian_nll_mod3/"
 N_GPU="1"
 SEED=100
-MODEL_NAME="GNN4CD_model_mod1_GaussianNLL"
+MODEL_NAME="GNN4CD_model_mod3_GaussianNLL"
 MODEL_TYPE="Rall"
 TARGET_TYPE="temperature"
 LR_SCHEDULER="StepLR"
@@ -27,7 +27,7 @@ ACCELERATE_CONFIG_PATH="/leonardo/home/userexternal/vblasone/.cache/huggingface/
 #-------------------------------#
 # INPUT/OUTPUT FILES PARAMETERS #
 #-------------------------------#
-INPUT_PATH="/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/ESD_pseudo_reality/tasmax/train/"
+INPUT_PATH="/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/train/ESD_pseudo_reality/tasmax/"
 OUTPUT_PATH=${LOG_PATH}
 LOG_FILE="log.txt"
 LOW_INPUT_FILE="low_input.npy"

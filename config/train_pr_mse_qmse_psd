@@ -7,7 +7,7 @@ TIME="05:00:00"
 MEM="100G"
 JOB_NAME="mse-qmse-psd"
 MAIL="vblasone@ictp.it"
-LOG_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/pr/mse_005qmse_005psd_land_coords_ij/"
+LOG_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/pr/mse_01qmse_005psd_land_coords_ij/"
 N_GPU="1"
 SEED=100
 MODEL_NAME="GNN4CD_model_mod1"
@@ -27,7 +27,7 @@ ACCELERATE_CONFIG_PATH="/leonardo/home/userexternal/vblasone/.cache/huggingface/
 #-------------------------------#
 # INPUT/OUTPUT FILES PARAMETERS #
 #-------------------------------#
-INPUT_PATH="/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/ESD_pseudo_reality/pr/train/"
+INPUT_PATH="/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/train/ESD_pseudo_reality/pr/"
 OUTPUT_PATH=${LOG_PATH}
 LOG_FILE="log.txt"
 LOW_INPUT_FILE="low_input.npy"
@@ -50,7 +50,7 @@ LR_STEP_SIZE=25
 LR=0.001
 WEIGHT_DECAY=0.0
 LOSS_FN="MSE_QMSE_PSD_Loss"
-ALPHA=0.005
+ALPHA=0.01
 BETA=0.005
 WANDB_PROJECT_NAME="CORDEXML_pr"
 #CHECKPOINT_CTD="/leonardo_work/ICT26_ESP/vblasone/test/HiResPrecipNet/runs/rounded/reg/reg_quantized_log05_alpha0025_nowd/checkpoint_19/"
@@ -58,6 +58,10 @@ WANDB_PROJECT_NAME="CORDEXML_pr"
 #----------------------------------------#
 #             TRAINING PERIOD            #
 #----------------------------------------#
+
+TRAIN_YEARS=""
+VAL_YEARS=""
+
 TRAIN_YEAR_START=1961
 TRAIN_MONTH_START=1
 TRAIN_DAY_START=3
@@ -66,9 +70,9 @@ TRAIN_MONTH_END=12
 TRAIN_DAY_END=29
 VALIDATION_YEAR=1980
 
-FIRST_YEAR=0
-LAST_YEAR=0
-N_VAL_YEARS=0
+FIRST_YEAR=""
+LAST_YEAR=""
+N_VAL_YEARS=""
 
 #-----------------#
 # BOOLEAN OPTIONS #
