@@ -68,8 +68,6 @@ parser.add_argument('--no-make_plots', dest='make_plots', action='store_false')
 
 ### PARAMETERS THAT ARE NOW SET MANUALLY
 THRESHOLD = 0.0
-MIN_VAL_TEMP = 230
-MAX_VAL_TEMP = 320
 
 HISTORY_LENGTH_MAP = {
     "1h": 24,   # [t-24,...,t]
@@ -229,15 +227,15 @@ if __name__ == '__main__':
     #-- Stesp 1. Standardize input data
     write_log(f"\nStandardizing input data.", args, accelerator, 'a')
     low_input_test_std, high_input_std = standardize_input(
-            x_low=low_input_test,
-            x_high=orog,
-            means_low=means_low,
-            stds_low=stds_low,
-            means_high=means_high,
-            stds_high=stds_high,
-            n_vars=n_vars,
-            high_independent_vars=HIGH_INDEPENDENT_VARS,
-        )
+        x_low=low_input_test,
+        x_high=orog,
+        means_low=means_low,
+        stds_low=stds_low,
+        means_high=means_high,
+        stds_high=stds_high,
+        n_vars=n_vars,
+        high_independent_vars=HIGH_INDEPENDENT_VARS,
+    )
     
     #-- Step 2. Add the other high-res features
     if use_mask_sealand:
