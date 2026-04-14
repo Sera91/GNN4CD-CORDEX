@@ -7,10 +7,10 @@ TIME="05:00:00"
 MEM="100G"
 JOB_NAME="gnll"
 MAIL="vblasone@ictp.it"
-LOG_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/tasmax/gaussian_nll_mod3/"
+LOG_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/tasmax/gaussian_nll/"
 N_GPU="1"
 SEED=100
-MODEL_NAME="GNN4CD_model_mod3_GaussianNLL"
+MODEL_NAME="GNN4CD_model_mod1_GaussianNLL"
 MODEL_TYPE="Rall"
 TARGET_TYPE="temperature"
 LR_SCHEDULER="StepLR"
@@ -77,9 +77,6 @@ USE_ACCELERATE=true
 MAKE_VAL_PLOTS=true
 
 #--------------do not change here below------------------
-
-ALPHA=0.0
-BETA=0.0
 
 if [ ${USE_ACCELERATE} = true ] ; then
 	USE_ACCELERATE="--use_accelerate"

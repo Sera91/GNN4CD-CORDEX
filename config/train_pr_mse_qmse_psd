@@ -3,11 +3,11 @@
 #------------------#
 # SLURM PARAMETERS #
 #------------------#
-TIME="05:00:00"
+TIME="08:00:00"
 MEM="100G"
 JOB_NAME="mse-qmse-psd"
 MAIL="vblasone@ictp.it"
-LOG_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/pr/mse_01qmse_005psd_land_coords_ij/"
+LOG_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/pr/mse_005qmse_005psd_land_coords_ij/"
 N_GPU="1"
 SEED=100
 MODEL_NAME="GNN4CD_model_mod1"
@@ -50,10 +50,15 @@ LR_STEP_SIZE=25
 LR=0.001
 WEIGHT_DECAY=0.0
 LOSS_FN="MSE_QMSE_PSD_Loss"
-ALPHA=0.01
+ALPHA=0.005
 BETA=0.005
 WANDB_PROJECT_NAME="CORDEXML_pr"
-#CHECKPOINT_CTD="/leonardo_work/ICT26_ESP/vblasone/test/HiResPrecipNet/runs/rounded/reg/reg_quantized_log05_alpha0025_nowd/checkpoint_19/"
+
+THRESHOLD=0.0
+BINMIN=0.0
+BINMAX=350
+BINWIDTH=0.5
+BINSCALE="log"
 
 #----------------------------------------#
 #             TRAINING PERIOD            #

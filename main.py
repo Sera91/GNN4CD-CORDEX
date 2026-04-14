@@ -60,9 +60,9 @@ parser.add_argument('--make_val_plots', action='store_true')
 parser.add_argument('--no-make_val_plots', dest='make_val_plots', action='store_false')
 
 parser.add_argument('--loss_fn', type=str)
-parser.add_argument('--alpha', type=float)
-parser.add_argument('--beta', type=float)
-parser.add_argument('--seed', type=int)
+parser.add_argument('--alpha', type=float, default=0.005)
+parser.add_argument('--beta', type=float, default=0.005)
+parser.add_argument('--seed', type=int, default=100)
 parser.add_argument('--n_gpu', type=int, default=4)
 
 parser.add_argument('--model_type', type=str)
@@ -90,18 +90,18 @@ parser.add_argument('--n_val_years', type=str, default="")
 parser.add_argument('--train_years', type=str, default="")
 parser.add_argument('--val_years', type=str, default="")
 
+parser.add_argument('--threshold', type=float, default=0.0)
+parser.add_argument('--binmin', type=float, default=0.0)
+parser.add_argument('--binmax', type=float, default=1000)
+parser.add_argument('--binwidth', type=float, default=0.5)
+parser.add_argument('--binscale', type=str, default="log")
 
-### PARAMETERS THAT ARE NOW SET MANUALLY
-THRESHOLD = 0.0
-BINMIN = np.log1p(THRESHOLD)
-BINMAX = np.log1p(350)
-BINWIDTH = np.log1p(0.5) # 0.5*24 mm/day
 
 HISTORY_LENGTH_MAP = {
     "1h": 24,   # [t-24,...,t]
     "3h": 8,    # [t-24,t-21,...,t]
     "6h": 4,    # [t-24,t-18,t-12,t-6,t]
-    "1d": 0,    # [t-2,t-1,t]
+    "1d": 2,    # [t-2,t-1,t]
 }
 
 HIGH_INDEPENDENT_VARS=True
@@ -282,38 +282,40 @@ if __name__ == '__main__':
             train_idxs=train_idxs[train_idxs_valid_subset],
             stats_path=args.output_path
         )
-    
-    # bins_mm = np.concatenate([
-    #     np.array([0.0, 1.0]),          # dry vs wet
-    #     np.arange(1, 20, 2),           # 1–20 mm, 1 mm resolution
-    #     np.arange(20, 200, 10),         # coarser above
-    # ])
 
     #-- Step 4 - Compute QMSE bins
     if "QMSE" in args.loss_fn:
+        if args.binscale == "log":
+            binmin = np.log1p(args.binmin)
+            binmax = np.log1p(args.binmax)
+            binwidth = np.log1p(args.binwidth)
+        else:
+            binmin = args.binmin
+            binmax = args.binmax
+            binwidth = args.binwidth
+
         target_bins = derive_qmse_bins(
             target_prepared,
             train_idxs[train_idxs_valid_subset],
             args,
             accelerator,
-            # bins=np.log1p(bins_mm)
-            binmin=BINMIN,
-            binmax=BINMAX,
-            binwidth=BINWIDTH
+            binmin=binmin,
+            binmax=binmax,
+            binwidth=binwidth
         )
         
     #-- Step 5 - Compute input statistics + standardize
     # At this point the high input coincides to orog, then mask and ij are added
     low_input_std, high_input_std = compute_input_statistics_and_standardize(
-            x_low=low_input,
-            x_high=orog,
-            train_idxs=train_idxs,
-            n_vars=n_vars,
-            apply_stats=True,
-            high_independent_vars=HIGH_INDEPENDENT_VARS,
-            args=args,
-            accelerator=accelerator
-        )
+        x_low=low_input,
+        x_high=orog,
+        train_idxs=train_idxs,
+        n_vars=n_vars,
+        apply_stats=True,
+        high_independent_vars=HIGH_INDEPENDENT_VARS,
+        args=args,
+        accelerator=accelerator
+    )
     
     #-- Step 6. Add the other high-res features
     if use_mask_sealand:
