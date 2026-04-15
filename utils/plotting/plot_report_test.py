@@ -474,6 +474,11 @@ if __name__ == '__main__':
     elif val_mode == "era5":
         comparison_label = "era5 (1981-2000)"
 
+    if DOMAIN == "ALPS":
+        gcm_model = "CNRM-CM5"
+    elif DOMAIN == "NZ" or DOMAIN == "SA":
+        gcm_model = "ACCESS-CM2"
+
     VAL_FILE = input_path + val_file
     OUTPUT_PDF = plot_path + f"{report_name}.pdf"
 
@@ -483,7 +488,7 @@ if __name__ == '__main__':
     
     data2 = xr.open_dataset(val_file_help)
     
-    if args.domain=='ALPS':
+    if DOMAIN == 'ALPS':
         y = data2.y.to_numpy()
         x = data2.x.to_numpy()
         y_dim = y.shape[0]
@@ -506,28 +511,36 @@ if __name__ == '__main__':
         times  = data['times'] if 'times' in data else np.arange(pred.shape[1])
 
     if val_mode == "val_1":
-        comparison_data = np.load(f"/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/train/ESD_pseudo_reality/{VAR}/target.npy")
-        time_index_target = np.load(f"/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/train/ESD_pseudo_reality/{VAR}/time_index.npy")
-        idx_start, idx_end = date_to_idxs_from_timeindex(1980,1,1,time_index_target,1980,12,31)
+        comparison_data = xr.open_dataset(f"/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/CORDEX-domains/{DOMAIN}_domain/train/ESD_pseudo_reality/target/pr_tasmax_{gcm_model}_1961-1980.nc")
+        target = comparison_data[VAR].to_numpy()
+        target = target.transpose(1, 2, 0)
+        target = target.reshape(target.shape[0]*target.shape[1], -1)
+        time_index = comparison_data["time"].to_numpy()
+        idx_start, idx_end = date_to_idxs_from_timeindex(1980,1,1,time_index,1980,12,31)
         idx_end = min(idx_end, comparison_data.shape[1]-1)
         target = comparison_data[:,idx_start:idx_end]
-        print(f"\nval_1 - comparison data: shape = {target.shape}, time_bounds: [{time_index_target[idx_start]}, {time_index_target[idx_end]}]")
+        print(f"\nval_1 - comparison data: shape = {target.shape}, time_bounds: [{time_index[idx_start]}, {time_index[idx_end]}]")
     elif val_mode == "val_2":
-        comparison_data = np.load(f"/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/train/Emulator_hist_future/{VAR}/target.npy")
-        time_index_target = np.load(f"/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/train/Emulator_hist_future/{VAR}/time_index.npy")
-        idx_start, idx_end = date_to_idxs_from_timeindex(2098,1,1,time_index_target,2099,12,31)
+        comparison_data = xr.open_dataset(f"/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/CORDEX-domains/{DOMAIN}_domain/train/Emulator_hist_future/target/pr_tasmax_{gcm_model}_1961-1980_2080-2099.nc")
+        target = comparison_data[VAR].to_numpy()
+        target = target.transpose(1, 2, 0)
+        target = target.reshape(target.shape[0]*target.shape[1], -1)
+        time_index = comparison_data["time"].to_numpy()
+        idx_start, idx_end = date_to_idxs_from_timeindex(1980,1,1,time_index,1980,12,31)
         idx_end = min(idx_end, comparison_data.shape[1]-1)
         target = comparison_data[:,idx_start:idx_end]
-        print(f"\nval_2 - comparison data: shape = {target.shape}, time_bounds: [{time_index_target[idx_start]}, {time_index_target[idx_end]}]")
+        print(f"\nval_2 - comparison data: shape = {target.shape}, time_bounds: [{time_index[idx_start]}, {time_index[idx_end]}]")
     elif val_mode == "era5":
         if VAR == "pr":
             ERA5_VAR = "tp"
         else:
             ERA5_VAR = "tasmax"
-        comparison_data = xr.open_dataset(f"/leonardo_work/ICT26_ESP/SHARED/ERA5_daily/ALPS_domain/{ERA5_VAR}_daily_remapnn-cordexml_1981-2000.nc")
+        comparison_data = xr.open_dataset(f"/leonardo_work/ICT26_ESP/SHARED/ERA5_daily/{DOMAIN}_domain/{ERA5_VAR}_daily_remapnn-cordexml_1981-2000.nc")
         target = comparison_data[ERA5_VAR].to_numpy()
         target = target.transpose(1, 2, 0)
         target = target.reshape(target.shape[0]*target.shape[1], -1)
+        time_index = comparison_data["time"].to_numpy()
+        print(f"\nera5 - comparison data: shape = {target.shape}, time_bounds: [{time_index[0]}, {time_index[-1]}]")
     else:
         raise Exception("val_mode should be either 'val_1', 'val_2' or 'era5'")
         
