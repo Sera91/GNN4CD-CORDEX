@@ -14,7 +14,7 @@ VAR = cfg["VAR"]
 job_name_list = [f"{cfg['JOB_NAME']}_{ii+1}" for ii in range(NUM_TESTS)]
 pred_list = [cfg[f'PREDICTORS_FILE_{ii+1}'] for ii in range(NUM_TESTS)]
 input_list = [cfg[f'INPUT_PATH_{ii+1}'] for ii in range(NUM_TESTS)]
-log_list = [f"log_test_{ii}_{VAR}.txt" for ii in range(NUM_TESTS)]
+log_list = [f"log_test_{ii+1}_{VAR}.txt" for ii in range(NUM_TESTS)]
 outputP_list = [cfg[f'OUTPUT_PATH_{ii+1}'] for ii in range(NUM_TESTS)]
 outputF_list = [cfg[f'OUTPUT_{ii+1}'] for ii in range(NUM_TESTS)]
 period_list = [cfg[f'PERIOD_{ii+1}'] for ii in range(NUM_TESTS)]
@@ -49,7 +49,6 @@ run_report = cfg["run_report"]
 os.makedirs(f"slurm_predictions/{experiment}/{VAR}", exist_ok=True)
 
 for ii in range(len(input_list)):
-
 
     # 1. WRITE PREDICTION SLURM FILE
     slurm_file = f"slurm_predictions/{experiment}/{VAR}/run_prediction_{VAR}_{DOMAIN}_test_{ii}_{experiment}.slurm"

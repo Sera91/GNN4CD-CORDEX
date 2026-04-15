@@ -84,7 +84,6 @@ def return_test_idxs(predictor: xr.Dataset,
     else:
             years_test = list(range(2080, 2100))
     
-    
     test_idxs=np.argwhere(np.isin(predictor['time'].dt.year, years_test))
     
     return test_idxs
@@ -227,20 +226,15 @@ if __name__ == '__main__':
         n_vars=n_vars,
         high_independent_vars=HIGH_INDEPENDENT_VARS,
     )
-
-    write_log(f"\nn_static_high: {orog.shape}", args, accelerator, 'a')
-    write_log(f"\nn_static_high: {high_input_std.shape}", args, accelerator, 'a')
     
     #-- Add the other high-res features
     if use_mask_sealand:
         high_input_std = np.concatenate((high_input_std, mask_sealand), axis=-1)
         write_log(f"\nAdding mask sea-land node features", args, accelerator, 'a')
-        write_log(f"\nn_static_high: {high_input_std.shape}", args, accelerator, 'a')
 
     if use_coords_ij:
         high_input_std = np.concatenate((high_input_std, coords_ij), axis=-1)
         write_log(f"\nAdding ij node features", args, accelerator, 'a')
-        write_log(f"\nn_static_high: {high_input_std.shape}", args, accelerator, 'a')
 
     #-- Step 3 - torch tensors from numpy arrays
     test_idxs = torch.from_numpy(test_idxs).int()

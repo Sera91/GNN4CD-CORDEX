@@ -476,8 +476,10 @@ if __name__ == '__main__':
 
     if DOMAIN == "ALPS":
         gcm_model = "CNRM-CM5"
+        remap_op = "remapnn"
     elif DOMAIN == "NZ" or DOMAIN == "SA":
         gcm_model = "ACCESS-CM2"
+        remap_op = "remapcon"
 
     VAL_FILE = input_path + val_file
     OUTPUT_PDF = plot_path + f"{report_name}.pdf"
@@ -535,7 +537,7 @@ if __name__ == '__main__':
             ERA5_VAR = "tp"
         else:
             ERA5_VAR = "tasmax"
-        comparison_data = xr.open_dataset(f"/leonardo_work/ICT26_ESP/SHARED/ERA5_daily/{DOMAIN}_domain/{ERA5_VAR}_daily_remapnn-cordexml_1981-2000.nc")
+        comparison_data = xr.open_dataset(f"/leonardo_work/ICT26_ESP/SHARED/ERA5_daily/{DOMAIN}_domain/{ERA5_VAR}_daily_{remap_op}-cordexml_1981-2000.nc")
         target = comparison_data[ERA5_VAR].to_numpy()
         target = target.transpose(1, 2, 0)
         target = target.reshape(target.shape[0]*target.shape[1], -1)

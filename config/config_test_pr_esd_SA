@@ -1,8 +1,11 @@
 [CONFIG]
 #!/bin/bash
-write_slurm=True # create the slurm scripts to run the test?
-run_slurm=True # run the test?
-run_report=True # create the reports?
+# create the slurm scripts to run the test?
+write_slurm=True
+# run the test?
+run_slurm=True
+# create the reports?
+run_report=True
 
 #------------------#
 # SLURM PARAMETERS #
@@ -18,9 +21,12 @@ JOB_NAME=ESD
 
 # conda env
 ENV_PATH=/leonardo/home/userexternal/vblasone/.conda/envs/GNN4CDenv
-SOURCE_PATH=/leonardo/home/userexternal/vblasone/.bashrc #### UPDATE WITH YOUR PATH ####
-MAIN_PATH=/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/  #### UPDATE WITH YOUR PATH ####
-ACCELERATE_CONFIG_PATH=/leonardo/home/userexternal/vblasone/.cache/huggingface/accelerate/default_config_1.yaml #### UPDATE WITH YOUR PATH ####
+#### update SOURCE_PATH with your path
+SOURCE_PATH=/leonardo/home/userexternal/vblasone/.bashrc
+#### update MAIN_PATH with your path
+MAIN_PATH=/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/
+ #### update ACCELERATE_CONFIG_PATH with your path
+ACCELERATE_CONFIG_PATH=/leonardo/home/userexternal/vblasone/.cache/huggingface/accelerate/default_config_1.yaml
 USE_ACCELERATE=--use_accelerate
 
 #---------------------------#
@@ -47,9 +53,10 @@ EXPERIMENT=ESD_pseudo_reality
 DOMAIN=SA
 NUM_TESTS=12
 
-
-TRAINING_PATH=/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/ESD_pseudo_reality/pr/best_run/mse_005qmse_005psd_land_coords_ij/ #### update with the path to your best run
-INPUT_PATH=/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/SA/train/ESD_pseudo_reality/pr/ #### update with the path to the folder where you saved the preprocess files for training
+#### update TRAINING_PATH with the path to your best run
+TRAINING_PATH=/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/ESD_pseudo_reality/pr/best_run/mse_005qmse_005psd_land_coords_ij/
+#### update INPUT_PATH with the path to the folder where you saved the preprocess files for training
+INPUT_PATH=/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/SA/train/ESD_pseudo_reality/pr/
 PLOT_PATH=/leonardo_work/ICT26_ESP/SHARED/CORDEX-predictions/SA_domain/ESD_pseudo_reality/Test_reports/
 
 PREDICTORS_FILE_1=ACCESS-CM2_1981-2000.nc 
