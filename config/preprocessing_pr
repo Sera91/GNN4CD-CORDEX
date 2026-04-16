@@ -6,7 +6,7 @@
 TIME="00:30:00"
 MEM="250G"
 JOB_NAME="pr-ALPS"
-LOG_PATH="/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/ESD_pseudo_reality/pr/train/"
+LOG_PATH="/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/train/ESD_pseudo_reality/pr/"
 TARGET_TYPE="precipitation"
 PREDICTORS_DATASET="CORDEXML"
 TARGET_DATASET="CORDEXML"
@@ -42,8 +42,6 @@ TOPO_FILE="Static_fields_fixed.nc"
 
 INPUT_PATH_MASK_SEALAND="/leonardo_work/ICT26_ESP/SHARED/TOPO/"
 MASK_SEALAND_FILE="mask_sealand_CORDEXML.nc"
-
-SUFFIX_PHASE_2=""
 
 LON_GRID_RADIUS_HIGH=0.25 # i.e. 0.25/8*2
 LAT_GRID_RADIUS_HIGH=0.15 # i.e. 0.25/10*2

@@ -6,7 +6,7 @@
 TIME="00:30:00"
 MEM="250G"
 JOB_NAME="tasmax-ALPS"
-LOG_PATH="/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/ESD_pseudo_reality/tasmax/train/"
+LOG_PATH="/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/ALPS/train/ESD_pseudo_reality/tasmax/"
 TARGET_TYPE="temperature"
 PREDICTORS_DATASET="CORDEXML"
 TARGET_DATASET="CORDEXML"
