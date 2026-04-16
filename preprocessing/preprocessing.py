@@ -339,4 +339,7 @@ if target_high is not None:
 else:
     write_log(f"\n-- 8. High time index - ignoring", args, accelerator=None, mode='a')
 
+write_log(f"\n-- 9. unique_src", args, accelerator=None, mode='a')
+np.save(args.output_path+"unique_src.npy", unique_src)
+
 write_log(f"\n\n#### DONE!\nIn total, preprocessing took {time.time() - time_start} seconds", args, accelerator=None, mode='a')
