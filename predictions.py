@@ -181,7 +181,6 @@ if __name__ == '__main__':
         write_log(f"\nA list of test years have been provided.", args, accelerator, 'a')
         test_idxs_list = []
         test_idxs_valid_list = []
-        test_idxs_valid_subset_list = []
         test_idxs_list = []
         # Convert "year1_year2_year3_year4" → [year1, year2, year3, year4]
         years = sorted([int(y) for y in args.test_years.split("_")])
