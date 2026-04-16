@@ -152,14 +152,10 @@ class NLL_Trainer(object):
             if lr_scheduler is not None:
                 lr_scheduler.step()  
 
-    def _create_plots_reg(self, y_pred, y, t, times, graph, accelerator, step, epoch, args):
+    def _create_plots_reg(self, y_pred, y, t, times, graph, accelerator, step, epoch, args, binmax=350,
+                          metadata_file_path="/leonardo_work/ICT26_ESP/vblasone/ICTP-GNN4CD/utils/CORDEXML_plot_params.json"):
 
-        if "CORDEXML" in args.run_type:
-            run_type = "CORDEXML"
-        else:
-            run_type = args.run_type
-            
-        with open(f"/leonardo_work/ICT26_ESP/vblasone/ICTP-GNN4CD/utils/{run_type}_plot_params.json") as f:
+        with open(metadata_file_path) as f:
             meta = json.load(f)
 
         meta = convert_dict(meta)
@@ -176,22 +172,14 @@ class NLL_Trainer(object):
         y_pred_plot = y_pred.squeeze().swapaxes(0,1).cpu().numpy()[:,indices]
         y_plot = y.squeeze().swapaxes(0,1).cpu().numpy()[:,indices]
 
-        if target_type == "precipitation":
-            # no log transformations, training directly in linear space
-            y_pred_pdf = y_pred_plot.flatten()
-            y_pdf = y_plot.flatten()
-            if "CERRA" in args.run_type:
-                y_pred_plot *= 24 # mm/day
-                y_plot *= 24 # mm/day
-                bins = np.arange(0,40,0.5).astype(np.float32)
-            elif "CORDEXML" in args.run_type:
-                bins = np.arange(0,350,1).astype(np.float32)
-        elif target_type == "temperature":
-            y_pred_plot = invert_normalization(y_pred_plot, stats_path=args.output_path)
-            y_plot = invert_normalization(y_plot, stats_path=args.output_path)
-            y_pred_pdf = y_pred_plot.flatten()
-            y_pdf = y_plot.flatten()
-            bins = np.arange(230,320,1).astype(np.float32)
+        # temperature
+        y_pred_plot = invert_normalization(y_pred_plot, stats_path=args.output_path)
+        y_plot = invert_normalization(y_plot, stats_path=args.output_path)
+        y_pred_pdf = y_pred_plot.flatten()
+        y_pdf = y_plot.flatten()
+        binmin = min(np.floor(y_pred_plot), np.floor(y_plot)) - 5
+        binmax = max(np.ceil(y_pred_plot), np.ceil(y_plot)) + 5
+        bins = np.arange(binmin,binmax,1).astype(np.float32)
 
         cmap_dict = get_cmap_dict()
         bounds_avg = [0, 1, 1.5, 2, 4, 6, 8, 10, 12] #, 15, 20] #, 25, 30, 35]
@@ -290,18 +278,11 @@ class NLL_Trainer(object):
             legend_outside=meta[target_type]["legend_outside"]
         )
 
-        if args.target_type == "precipitation":
-            accelerator.log({
-                meta[target_type]["map_title"]: [wandb.Image(fig_avg)],
-                "bias":  [wandb.Image(fig_bias)],
-                "pdf": [wandb.Image(fig_pdf)],
-                }, step=step)
-        else:
-            accelerator.log({
-                meta[target_type]["map_title"]: [wandb.Image(fig_avg)],
-                "bias":  [wandb.Image(fig_bias)],
-                "pdf": [wandb.Image(fig_pdf)],
-                }, step=step)
+        accelerator.log({
+            meta[target_type]["map_title"]: [wandb.Image(fig_avg)],
+            "bias":  [wandb.Image(fig_bias)],
+            "pdf": [wandb.Image(fig_pdf)],
+            }, step=step)
         
         plt.close(fig_avg)
         plt.close(fig_bias)
@@ -312,10 +293,7 @@ class NLL_Trainer(object):
             if args.target_type == "precipitation":
                 data.pr_gnn4cd = y_pred_plot
             elif args.target_type == "temperature":
-                if args.run_type == "CERRA":
-                    data.t2m_gnn4cd = y_pred_plot
-                elif args.run_type == "CORDEXML":
-                    data.tasmax_gnn4cd = y_pred_plot
+                data.tasmax_gnn4cd = y_pred_plot
             
             data.target = y_plot
 
