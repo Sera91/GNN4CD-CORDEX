@@ -5,18 +5,10 @@ import json
 import argparse
 import time
 import os
-import sys
-import matplotlib.pyplot as plt
 import importlib
-
-#import safetensors
-
 from accelerate import Accelerator
-
 from torch_geometric.data import HeteroData
-from torch_geometric.utils import degree
 
-import dataset
 from dataset import Dataset_Graph, custom_collate_fn_graph
 
 from utils.helpers.tools import set_seed_everything
@@ -24,7 +16,7 @@ from data.loaders.complete_loader import load_dataset_CORDEXML
 from utils.helpers.tools import write_log
 from utils.testing.test_NLL import NLL_Tester
 from utils.testing.test import Tester
-from utils.helpers.tools import write_log, standardize_input, invert_normalization
+from utils.helpers.tools import write_log, standardize_input, invert_normalization, date_to_idxs_from_timeindex
 
 import xarray as xr
 
@@ -67,29 +59,32 @@ parser.add_argument('--no-use_accelerate', dest='use_accelerate', action='store_
 parser.add_argument('--make_plots',  action='store_true')
 parser.add_argument('--no-make_plots', dest='make_plots', action='store_false')
 
-def return_test_idxs(predictor: xr.Dataset, 
-                     period: str):
-    """Split data into training and test sets.
-    
-    Args:
-        predictor: Predictor dataset
-        period: periof experiment name. #(['1981-2000','2041-2060','2080-2099'])
-        
-    """
-    if period == 'historical':
-            years_test = list(range(1981, 2001))
-        
-    elif period == 'mid_century':
-            years_test = list(range(2041, 2061))
-    else:
-            years_test = list(range(2080, 2100))
-    
-    test_idxs=np.argwhere(np.isin(predictor['time'].dt.year, years_test))
-    
-    return test_idxs
+def return_test_idxs_from_years_list(years_list, time_index, history_length):
+    test_idxs_list = []
+    test_idxs_valid_list = []
+    test_idxs_list = []
+    years = sorted(years_list)
+    for year in years:
+        test_start_idx, test_end_idx = date_to_idxs_from_timeindex(
+            year_start=year, month_start=1, day_start=1,
+            year_end=year, month_end=12, day_end=31,
+            time_index=time_index
+        )
+        if test_start_idx - history_length < 0:
+            test_start_idx = history_length
+        # indices of output
+        test_idxs_list.append(np.arange(test_start_idx - history_length, test_end_idx))
+        # indices of input
+        test_idxs_valid_list.append(np.arange(test_start_idx, test_end_idx))
+    test_idxs = np.concatenate(test_idxs_list)
+    test_idxs_valid = np.concatenate(test_idxs_valid_list)
+    # indices of input but referred to test_idxs_valid
+    test_idxs_valid_subset = np.where(np.isin(test_idxs, test_idxs_valid))[0]
+
+    return test_idxs, test_idxs_valid_subset
+
 
 THRESHOLD = 0.0
-HIGH_INDEPENDENT_VARS = True
 
 HISTORY_LENGTH_MAP = {
     "1h": 24,   # [t-24,...,t]
@@ -97,6 +92,8 @@ HISTORY_LENGTH_MAP = {
     "6h": 4,    # [t-24,t-18,t-12,t-6,t]
     "1d": 2,    # [t-2,t-1,t]
 }   
+
+HIGH_INDEPENDENT_VARS = True
 
 if __name__ == '__main__':
 
@@ -146,28 +143,19 @@ if __name__ == '__main__':
     else:
         use_coords_ij = False
 
-    #-- 5. Time index
-    time_index = np.load(args.input_path+"time_index.npy")
-
-    #-- 6. Low input metadata
+    #-- 5. Low input metadata
     with open(args.input_path + args.metadata_file, "r") as f:
         metadata = json.load(f)
 
     predictors_filename = args.input_path_P + args.predictors_filename
-    predictor = xr.open_dataset(predictors_filename, engine="netcdf4")
     # Load the input dataset
     params = ['q', 't', 'u', 'v', 'z']
     levels = ['850', '700', '500']
-    n_vars=len(params)
-    n_levels=len(levels)
     load_dataset = load_dataset_CORDEXML
-    input_ds, lat_low, lon_low, low_time_index, low_native_time_res, low_time_res = load_dataset( params=params, levels=levels, file_path=args.input_path_P, file=args.predictors_filename, args=args)
 
-    history_length = HISTORY_LENGTH_MAP.get(low_time_res) # lookup for the predictors
-    if history_length is None:
-        raise ValueError(f"Unknown time resolution: {low_time_res}")
-    
-    seq_length = history_length + 1 # total length of the sequence for the RNN model
+    # Load the input dataset
+    input_ds, lat_low, lon_low, low_time_index, low_native_time_res, low_time_res = load_dataset(
+        params=params, levels=levels, file_path=args.input_path_P, file=args.predictors_filename, args=args)
 
     if lat_low[0] > lat_low[-1]:
         write_log(f"\nFlipping the lat axes to have the origin in the bottom left corner", args, accelerator=None, mode='a')
@@ -184,13 +172,29 @@ if __name__ == '__main__':
     lat_low = lat_low.flatten()
     lon_low = lon_low.flatten()
 
-    #### IMPORTANT CHANGE - NORMALIZATION NOW IN MAIN AND PREDICTION #### 
     input_ds = np.transpose(input_ds, (3, 4, 0, 1, 2)) #torch.permute(input_ds, (3,4,0,1,2)) # lat, lon, time, vars, levels
-    input_ds = input_ds.reshape(-1, *input_ds.shape[2:]) 
-                         
-    test_idxs = return_test_idxs(predictor, args.period).squeeze()
+    input_ds = input_ds.reshape(-1, *input_ds.shape[2:]) # num_nodes, time, vars, levels
 
-    test_idxs_valid_subset = test_idxs[history_length:]
+    unique_src = np.load(args.input_path + "unique_src.npy")
+    input_ds = input_ds[unique_src]
+
+    n_vars = input_ds.shape[2]
+    n_levels = input_ds.shape[3]
+
+    history_length = HISTORY_LENGTH_MAP.get(low_time_res) # lookup for the predictors
+    if history_length is None:
+        raise ValueError(f"Unknown time resolution: {low_time_res}")
+    
+    seq_length = history_length + 1 # total length of the sequence for the RNN model
+
+    if args.period == 'historical':
+        years_test = list(range(1981, 2001))
+    elif args.period == 'mid_century':
+        years_test = list(range(2041, 2061))
+    elif args.period == 'end_century':
+        years_test = list(range(2080, 2100))
+                         
+    test_idxs, test_idxs_valid_subset = return_test_idxs_from_years_list(years_test, low_time_index, history_length)
 
     # Statistics computed on training data
     means_low = np.load(args.train_path + "means_low.npy")
