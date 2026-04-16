@@ -153,7 +153,7 @@ class NLL_Trainer(object):
                 lr_scheduler.step()  
 
     def _create_plots_reg(self, y_pred, y, t, times, graph, accelerator, step, epoch, args, binmax=350,
-                          metadata_file_path="/leonardo_work/ICT26_ESP/vblasone/ICTP-GNN4CD/utils/CORDEXML_plot_params.json"):
+                          metadata_file_path="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_plot_params.json"):
 
         with open(metadata_file_path) as f:
             meta = json.load(f)
@@ -177,8 +177,8 @@ class NLL_Trainer(object):
         y_plot = invert_normalization(y_plot, stats_path=args.output_path)
         y_pred_pdf = y_pred_plot.flatten()
         y_pdf = y_plot.flatten()
-        binmin = min(np.floor(y_pred_plot), np.floor(y_plot)) - 5
-        binmax = max(np.ceil(y_pred_plot), np.ceil(y_plot)) + 5
+        binmin = min(np.floor(np.min(y_pred_plot)), np.floor(np.min(y_plot))) - 5
+        binmax = max(np.ceil(np.max(y_pred_plot)), np.ceil(np.min(y_plot))) + 5
         bins = np.arange(binmin,binmax,1).astype(np.float32)
 
         cmap_dict = get_cmap_dict()

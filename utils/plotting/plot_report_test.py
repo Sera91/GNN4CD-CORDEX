@@ -30,6 +30,7 @@ from numpy import fft
 warnings.filterwarnings('ignore')
 import pickle
 import xarray as xr
+import json
 
 sys.path.append("/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/GNN4CD-CORDEXML")
 os.environ["CARTOPY_DATA_DIR"] = "/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/cartopy/"
@@ -57,31 +58,7 @@ parser.add_argument('--period', type=str, default="")
 parser.add_argument('--val_mode', type=str, default="")
 parser.add_argument('--report_name', type=str, default="")
 parser.add_argument('--test_id', type=str, default="")
-
-# ==================== Configuration ====================
-
-MODEL_NAME = 'GNN4CD'
-
-WET_THRESHOLD = 1.0   # mm/day
-
-# ---- Fixed color scales matching DeepESD report ----
-# pr
-PR_RMSE_VMAX   = 12.0  # RMSE        (mm/day)
-PR_BIAS_VMAX   = 2.0   # Mean Bias   (mm/day)
-PR_SDII_VMAX   = 2.0   # Bias SDII   (mm/day)
-PR_RX1DAY_VMAX = 40.0  # Bias RX1day (mm/day)
-PR_WD_VMAX     = 5.0   # Wasserstein Distance
-
-# tasmax
-TX_RMSE_VMAX   = 4.0   # RMSE        (K)
-TX_BIAS_VMAX   = 1.0   # Mean Bias   (K)
-TX_P98_VMAX    = 3.0   # Bias p98    (K)
-TX_TXX_VMAX    = 3.0   # Bias TXx    (K)
-
-# daily comparison bias
-PR_DAILY_BIAS_VMAX = None   # None = auto (actual min/max)
-TX_DAILY_BIAS_VMAX = 5.5    # fixed (K)
-
+parser.add_argument('--test_year', type=str, default="")
 
 # ==================== Utility Functions ====================
 
@@ -153,12 +130,21 @@ def make_spatial_map(ax, lon, lat, values, vmin, vmax, cmap, title, plot_fn="pco
 
 def draw_maps_page(pdf, lon, lat, pred, target):
 
-    if EXPERIMENT == "Emulator_hist_future":
-        vmin_f = 0 if VAR == 'pr' else 275
-        vmax_f = np.nanpercentile(np.concatenate([pred, target]), 98) + 4 if VAR == 'pr' else 300
+    avg_cfg = CONFIG["average_field_ranges"][VAR]
+
+    # vmin is always fixed
+    vmin_f = avg_cfg["vmin"]
+
+    # vmax logic differs by variable
+    if VAR == "pr":
+        # dynamic percentile-based vmax
+        vmax_f = np.nanpercentile(np.concatenate([pred, target]), 98) + avg_cfg["vmax_offset"]
     else:
-        vmin_f = 0 if VAR == 'pr' else 275
-        vmax_f = np.nanpercentile(np.concatenate([pred, target]), 98) + 4 if VAR == 'pr' else 295
+        # tasmax: experiment-dependent fixed vmax
+        if EXPERIMENT == "Emulator_hist_future":
+            vmax_f = avg_cfg["vmax_emulator"]
+        else:
+            vmax_f = avg_cfg["vmax_esd"]
 
     if HAS_CARTOPY:
         fig = plt.figure(figsize=(16, 6))
@@ -167,7 +153,11 @@ def draw_maps_page(pdf, lon, lat, pred, target):
     else:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
-    cmap_field = 'magma' if VAR == 'tasmax' else 'turbo'
+    if VAR == "tasmax":
+        cmap_field = CONFIG["colormaps"]["field_tasmax"]
+    else:
+        cmap_field = CONFIG["colormaps"]["field_pr"]
+
     fig.suptitle(f'Average | {DOMAIN} | {VAR}',
                     fontsize=14, fontweight='bold', y=0.98)
 
@@ -454,6 +444,26 @@ if __name__ == '__main__':
     log = open(log_file, "a")
     sys.stdout = log
 
+    # Load plot configuration
+    with open(f"/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_val_report_{DOMAIN}.json", "r") as f:
+        CONFIG = json.load(f)
+
+    MODEL_NAME = CONFIG["model"]["name"]
+    WET_THRESHOLD = CONFIG["thresholds"]["wet_threshold_mm_day"]
+    PR_RMSE_VMAX   = CONFIG["color_scales"]["pr"]["rmse_vmax"]
+    PR_BIAS_VMAX   = CONFIG["color_scales"]["pr"]["bias_vmax"]
+    PR_SDII_VMAX   = CONFIG["color_scales"]["pr"]["sdii_vmax"]
+    PR_RX1DAY_VMAX = CONFIG["color_scales"]["pr"]["rx1day_vmax"]
+    PR_WD_VMAX     = CONFIG["color_scales"]["pr"]["wasserstein_vmax"]
+
+    TX_RMSE_VMAX   = CONFIG["color_scales"]["tasmax"]["rmse_vmax"]
+    TX_BIAS_VMAX   = CONFIG["color_scales"]["tasmax"]["bias_vmax"]
+    TX_P98_VMAX    = CONFIG["color_scales"]["tasmax"]["p98_vmax"]
+    TX_TXX_VMAX    = CONFIG["color_scales"]["tasmax"]["txx_vmax"]
+
+    PR_DAILY_BIAS_VMAX = CONFIG["color_scales"]["daily_bias"]["pr_vmax"]
+    TX_DAILY_BIAS_VMAX = CONFIG["color_scales"]["daily_bias"]["tasmax_vmax"]
+
     val_file_help=f"/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/CORDEX-domains/{DOMAIN}_domain/train/ESD_pseudo_reality/predictors/Static_fields.nc"
     season_file=args.season_file
 
@@ -528,11 +538,11 @@ if __name__ == '__main__':
         x_dim = target.shape[2]
         target = target.transpose(1, 2, 0)
         target = target.reshape(target.shape[0]*target.shape[1], -1)
-        time_index = comparison_data["time"].to_numpy()
-        idx_start, idx_end = date_to_idxs_from_timeindex(1980,1,1,time_index,1980,12,31)
+        time_index_comparison = comparison_data["time"].to_numpy()
+        idx_start, idx_end = date_to_idxs_from_timeindex(1980,1,1,time_index_comparison,1980,12,31)
         idx_end = min(idx_end, target.shape[1]-1)
         target = target[:,idx_start:idx_end]
-        print(f"\nval_1 - comparison data: shape = {target.shape}, time_bounds: [{time_index[idx_start]}, {time_index[idx_end]}]")
+        print(f"\nval_1 - comparison data: shape = {target.shape}, time_bounds: [{time_index_comparison[idx_start]}, {time_index_comparison[idx_end]}]")
     elif val_mode == "val_2":
         comparison_data = xr.open_dataset(f"/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/CORDEX-domains/{DOMAIN}_domain/train/Emulator_hist_future/target/pr_tasmax_{gcm_model}_1961-1980_2080-2099.nc")
         target = comparison_data[VAR].to_numpy()
@@ -540,11 +550,11 @@ if __name__ == '__main__':
         x_dim = target.shape[2]
         target = target.transpose(1, 2, 0)
         target = target.reshape(target.shape[0]*target.shape[1], -1)
-        time_index = comparison_data["time"].to_numpy()
-        idx_start, idx_end = date_to_idxs_from_timeindex(2098,1,1,time_index,2099,12,31)
+        time_index_comparison = comparison_data["time"].to_numpy()
+        idx_start, idx_end = date_to_idxs_from_timeindex(2098,1,1,time_index_comparison,2099,12,31)
         idx_end = min(idx_end, target.shape[1]-1)
         target = target[:,idx_start:idx_end]
-        print(f"\nval_2 - comparison data: shape = {target.shape}, time_bounds: [{time_index[idx_start]}, {time_index[idx_end]}]")
+        print(f"\nval_2 - comparison data: shape = {target.shape}, time_bounds: [{time_index_comparison[idx_start]}, {time_index_comparison[idx_end]}]")
     elif val_mode == "era5":
         if VAR == "pr":
             ERA5_VAR = "tp"
@@ -561,14 +571,20 @@ if __name__ == '__main__':
         x_dim = target.shape[2]
         target = target.transpose(1, 2, 0)
         target = target.reshape(target.shape[0]*target.shape[1], -1)
-        time_index = comparison_data[ERA5_TIME_VAR].to_numpy()
-        print(f"\nera5 - comparison data: shape = {target.shape}, time_bounds: [{time_index[0]}, {time_index[-1]}]")
+        time_index_comparison = comparison_data[ERA5_TIME_VAR].to_numpy()
+        print(f"\nera5 - comparison data: shape = {target.shape}, time_bounds: [{time_index_comparison[0]}, {time_index_comparison[-1]}]")
     else:
         raise Exception("val_mode should be either 'val_1', 'val_2' or 'era5'")
         
     print(target.shape)
     
-    #sys.exit()
+    ### This is just for debugging purposes, when we want to see the reults for a single year!
+    if args.test_year != "":
+        test_year = int(args.test_year)
+        idx_start, idx_end = date_to_idxs_from_timeindex(test_year,1,1,time_index,test_year,12,31)
+        pred = pred[:,idx_start:idx_end]
+        prediction_label = "GNN4CD (test_year)"
+        OUTPUT_PDF = plot_path + f"{report_name}_{test_year}.pdf"
 
     def to_np(x):
         if isinstance(x, np.ndarray): return x
@@ -608,7 +624,10 @@ if __name__ == '__main__':
     print("  Mean Bias...")
     bias      = compute_bias(pred_grid, target_grid)
     bias_vmax = TX_BIAS_VMAX if VAR == 'tasmax' else PR_BIAS_VMAX
-    cmap_bias = 'RdBu_r' if VAR == 'tasmax' else 'BrBG'
+    if VAR == "tasmax":
+        cmap_bias = CONFIG["colormaps"]["bias_tasmax"]
+    else:
+        cmap_bias = CONFIG["colormaps"]["bias_pr"]
     draw_metric_page(pdf, lon_grid, lat_grid, bias, -bias_vmax, bias_vmax, cmap_bias,
                      'Mean Bias', f'Mean Bias | {MODEL_NAME} | {VAR}')
 
@@ -667,14 +686,14 @@ if __name__ == '__main__':
     fig.suptitle(f'Distribution Comparison | {DOMAIN} | {VAR} | {MODEL_NAME}',
                  fontsize=14, fontweight='bold', y=0.95)
 
-    if VAR == "tasmax" or VAR == "t2m":
-        min_val_tasmax = 230
-        max_val_tasmax= 320
-        bins = np.arange(min_val_tasmax,max_val_tasmax,1).astype(np.float32)
-    elif VAR == "pr":
-        min_val_pr = 0
-        max_val_pr = 350
-        bins = np.arange(min_val_pr,max_val_pr,1).astype(np.float32)
+    # Histogram bin configuration from JSON
+    hist_cfg = CONFIG["histogram_bins"][VAR]
+
+    min_val = hist_cfg["min"]
+    max_val = hist_cfg["max"]
+    step    = hist_cfg["step"]
+
+    bins = np.arange(min_val, max_val, step).astype(np.float32)
     
     if VAR == "pr":
         hist_vals, bins = np.histogram(pf, bins=bins, density=False)

@@ -41,8 +41,8 @@
     },
     "general": {
         "figsize": "[25,12]",
-        "xlim": "[20.2,33.4]",
-        "ylim": "[-34.9,-21.8]",
+        "xlim": "[-2,24]",
+        "ylim": "[36,52]",
         "fontsize_title": 30,
         "fontsize": 25,
         "fontsize_cbar_title": 25

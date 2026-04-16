@@ -381,8 +381,7 @@ if __name__ == '__main__':
     if args.target_type == "precipitation":
         data.pr_gnn4cd = y_pred
     elif args.target_type == "temperature":
-        data.tasmax_gnn4cd = y_pred
-    
+        data.tasmax_gnn4cd = y_pred    
 
     data.times = time_index_test[idxs]
     data["low"].lat = lat_low
