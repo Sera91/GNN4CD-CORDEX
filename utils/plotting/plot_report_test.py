@@ -504,7 +504,7 @@ if __name__ == '__main__':
     VAL_FILE = input_path + val_file
     OUTPUT_PDF = plot_path + f"{report_name}.pdf"
 
-    print(f"Creating plot report for predictions at path: {args.input_path}")
+    print(f"Creating plot report for predictions at path: {VAL_FILE}")
     print("\nLoading validation data...")
     with open(VAL_FILE, 'rb') as f:
         data = pickle.load(f)

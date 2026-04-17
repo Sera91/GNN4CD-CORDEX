@@ -1,9 +1,9 @@
 [CONFIG]
 #!/bin/bash
 # create the slurm scripts to run the test?
-write_slurm=False
+write_slurm=True
 # run the test?
-run_slurm=False
+run_slurm=True
 # create the reports?
 run_report=True
 
