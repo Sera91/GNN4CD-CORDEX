@@ -54,9 +54,9 @@ DOMAIN=SA
 NUM_TESTS=12
 
 #### update TRAINING_PATH with the path to your best run
-TRAINING_PATH=/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/ESD_pseudo_reality/pr/best_run/mse_005qmse_005psd_land_coords_ij/
+TRAINING_PATH=/leonardo_work/ICT26_ESP_0/wtang/CORDEXML-BENCHMARK/train/SA_domain/ESD_pseudo_reality/0415_pr_SA_StepLR150_ALPHA07_BETA005/
 #### update INPUT_PATH with the path to the folder where you saved the preprocess files for training
-INPUT_PATH=/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/SA/train/ESD_pseudo_reality/pr/
+INPUT_PATH=/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/SA_domain/train/ESD_pseudo_reality/pr/
 PLOT_PATH=/leonardo_work/ICT26_ESP/SHARED/CORDEX-predictions/SA_domain/ESD_pseudo_reality/Test_reports/
 
 PREDICTORS_FILE_1=ACCESS-CM2_1981-2000.nc 
