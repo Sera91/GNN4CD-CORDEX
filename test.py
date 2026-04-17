@@ -113,7 +113,7 @@ if __name__ == '__main__':
         accelerator = None
         print("I am not using accelerator")
 
-    write_log("Starting the testing...", args, accelerator, 'w')
+    write_log(f"Starting the testing for run: {args.train_path}", args, accelerator, 'w')
     write_log(f"Cuda is available: {torch.cuda.is_available()}. There are {torch.cuda.device_count()} available GPUs.", args, accelerator, 'a')
 
 #--------------------------------------------------------
