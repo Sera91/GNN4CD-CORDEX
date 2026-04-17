@@ -23,7 +23,6 @@ test_id_list = [cfg[f'TEST_ID_{ii+1}'] for ii in range(NUM_TESTS)]
 
 target_type = cfg['TARGET_TYPE']
 experiment = cfg['EXPERIMENT']
-domain = cfg['DOMAIN']
 accelerate_config = cfg['ACCELERATE_CONFIG_PATH']
 stats_mode = cfg['STATS_MODE']
 epoch = cfg['EPOCH']
@@ -90,7 +89,7 @@ python -m accelerate.commands.launch --config_file "{accelerate_config}" test.py
     --output_file="{outputF_list[ii]}" \
     --period="{period_list[ii]}" \
     --experiment={experiment} \
-    --domain={domain} \
+    --domain={DOMAIN} \
     --log_file="logs/{log_list[ii]}" \
     --graph_file="{graph_file}" \
     --batch_size=1 \
@@ -149,7 +148,8 @@ python ./utils/plotting/plot_report_test.py \
     --period="{period_list[ii]}" \
     --val_mode="{val_mode_list[ii]}" \
     --report_name="{report_name}" \
-    --test_id="{test_id_list[ii]}"
+    --test_id="{test_id_list[ii]}" \
+    --domain="{DOMAIN}"
 """
 
         with open(report_slurm, "w") as f:
