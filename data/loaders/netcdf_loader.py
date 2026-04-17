@@ -26,12 +26,16 @@ def read_dataset(path):
     except:
         time = ds["valid_time"].to_index()
 
-    # Infer native resolution
+    # Infer native resolution (handles both numpy timedelta64 and cftime timedelta)
     if len(time) > 1:
         deltas = np.diff(time)
-        native_res_hours = int(deltas[0] / np.timedelta64(1, "h"))
+        delta = deltas[0]
+        if hasattr(delta, 'total_seconds'): # cftime or Python timedelta
+            native_res_hours = int(delta.total_seconds() / 3600)
+        else:
+            native_res_hours = int(delta / np.timedelta64(1, "h"))
     else:
-        native_res_hours = None  # single timestep → no resolution
+        native_res_hours = None # single timestep → no resolution
 
     native_res_hours = str(f"{native_res_hours}h")
     if native_res_hours == "24h":
