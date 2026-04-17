@@ -445,7 +445,7 @@ if __name__ == '__main__':
     sys.stdout = log
 
     # Load plot configuration
-    with open(f"/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_val_report_{DOMAIN}.json", "r") as f:
+    with open(f"/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_test_report_{DOMAIN}.json", "r") as f:
         CONFIG = json.load(f)
 
     MODEL_NAME = CONFIG["model"]["name"]
