@@ -1,9 +1,9 @@
 [CONFIG]
 #!/bin/bash
 # create the slurm scripts to run the test?
-write_slurm=True
+write_slurm=False
 # run the test?
-run_slurm=True
+run_slurm=False
 # create the reports?
 run_report=True
 
@@ -54,9 +54,9 @@ DOMAIN=SA
 NUM_TESTS=12
 
 #### update TRAINING_PATH with the path to your best run
-TRAINING_PATH=/leonardo_work/ICT26_ESP_0/wtang/CORDEXML-BENCHMARK/train/SA_domain/ESD_pseudo_reality/0415_pr_SA_StepLR150_ALPHA07_BETA005/
+TRAINING_PATH=/leonardo_work/ICT26_ESP_0/wtang/CORDEXML-BENCHMARK/train/SA_domain/ESD_pseudo_reality/0415_pr_SA_StepLR25_ALPHA008_BETA005_LR0008_bin25/
 #### update INPUT_PATH with the path to the folder where you saved the preprocess files for training
-INPUT_PATH=/leonardo_work/ICT26_ESP/SHARED/preprocessed/CORDEXML/SA_domain/train/ESD_pseudo_reality/pr/
+INPUT_PATH=/leonardo_work/ICT26_ESP_0/wtang/CORDEXML-GRAPHS/SA_domain_0403/ESD_pseudo_reality/pr/train/
 PLOT_PATH=/leonardo_work/ICT26_ESP/SHARED/CORDEX-predictions/SA_domain/ESD_pseudo_reality/Test_reports/
 
 PREDICTORS_FILE_1=ACCESS-CM2_1981-2000.nc 
@@ -69,7 +69,7 @@ TEST_ID_1=test-1_val-1_ESD_ACCESS-CM2_hist_perfect
 
 PREDICTORS_FILE_2=NorESM2-MM_1981-2000.nc 
 INPUT_PATH_2=/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/CORDEX-domains/SA_domain/test/historical/predictors/perfect/
-OUTPUT_PATH_2=/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/CORDEX-predictions/SA_domain/ESD_pseudo_reality/historical/perfect/
+OUTPUT_PATH_2=/leonardo_work/ICT26_ESP/SHARED/CORDEX-predictions/SA_domain/ESD_pseudo_reality/historical/perfect/
 OUTPUT_2=NorESM2_MM_pr_pred.pkl
 PERIOD_2=historical
 VAL_MODE_2=era5

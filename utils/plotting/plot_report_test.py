@@ -49,7 +49,6 @@ parser.add_argument('--input_path', type=str, help='path to input directory')
 parser.add_argument('--output_path', type=str, help='path to output directory')
 parser.add_argument('--plot_path', type=str, help='path to plot directory')
 parser.add_argument('--val_file', type=str, help='validation graph pred')
-parser.add_argument('--season_file', type=str)
 parser.add_argument('--var', type=str, default='pr')
 parser.add_argument('--domain', type=str, default='ALPS')
 parser.add_argument('--experiment', type=str, default="ESD_pseudo_reality")
@@ -356,7 +355,7 @@ def compute_psd_new(field_0, field_1, lon, lat):
 
     return psd_x0_da, psd_x1_da
 
-def compute_psd_2d(field_values, lon, lat):
+def compute_psd_2d(field_values, lon, lat, t, label):
     """
     Compute radially-averaged 2D PSD matching DeepESD eval_diagnostics.psd exactly:
       - No mean subtraction
@@ -364,6 +363,9 @@ def compute_psd_2d(field_values, lon, lat):
       - Full-diagonal radial average via bincount
     """
     grid = nodes_to_grid(field_values, lon, lat)
+    if np.isnan(grid).any():
+        print(f"Time {t}: found {np.isnan(grid).sum()} nan values in {label} - filling with zeros.")
+        grid[np.isnan(grid)] = 0.0
 
     fft_grid = np.fft.fftshift(np.fft.fft2(grid))
     power    = np.abs(fft_grid) ** 2
@@ -464,9 +466,6 @@ if __name__ == '__main__':
     PR_DAILY_BIAS_VMAX = CONFIG["color_scales"]["daily_bias"]["pr_vmax"]
     TX_DAILY_BIAS_VMAX = CONFIG["color_scales"]["daily_bias"]["tasmax_vmax"]
 
-    val_file_help=f"/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/CORDEX-domains/{DOMAIN}_domain/train/ESD_pseudo_reality/predictors/Static_fields.nc"
-    season_file=args.season_file
-
     if period == 'historical':
         years_test = list(range(1981, 2001))
         prediction_label = "GNN4CD (1981-2000)"
@@ -499,6 +498,8 @@ if __name__ == '__main__':
             remap_op = "remapcon"
         else:
             remap_op = "remapnn"
+
+    val_file_help=f"/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/CORDEX-domains/{DOMAIN}_domain/train/ESD_pseudo_reality/target/pr_tasmax_{gcm_model}_1961-1980.nc"
 
     VAL_FILE = input_path + val_file
     OUTPUT_PDF = plot_path + f"{report_name}.pdf"
@@ -650,7 +651,7 @@ if __name__ == '__main__':
     T = pred.shape[1]
     psd_p_sum = None
     for _t in range(T):
-        wn, _p = compute_psd_2d(pred[:,   _t], y_dim, x_dim)
+        wn, _p = compute_psd_2d(pred[:,   _t], y_dim, x_dim, _t, "predictions")
         if psd_p_sum is None:
             psd_p_sum = np.zeros_like(_p)
         psd_p_sum += _p
@@ -659,7 +660,7 @@ if __name__ == '__main__':
     T = target.shape[1]
     psd_t_sum = None
     for _t in range(T):
-        _,  _q = compute_psd_2d(target[:, _t], y_dim, x_dim)
+        _,  _q = compute_psd_2d(target[:, _t], y_dim, x_dim, _t, "target")
         if psd_t_sum is None:
             psd_t_sum = np.zeros_like(_q)
         psd_t_sum += _q

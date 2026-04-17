@@ -175,8 +175,14 @@ if __name__ == '__main__':
     input_ds = np.transpose(input_ds, (3, 4, 0, 1, 2)) #torch.permute(input_ds, (3,4,0,1,2)) # lat, lon, time, vars, levels
     input_ds = input_ds.reshape(-1, *input_ds.shape[2:]) # num_nodes, time, vars, levels
 
-    unique_src = np.load(args.input_path + "unique_src.npy")
-    input_ds = input_ds[unique_src]
+    # conditional (depends on how the graph was preprocessed)
+    src = low_high_graph["low", "to", "high"].edge_index[0,:]              # shape (2,num_edges)
+    unique_src = np.unique(src)
+    num_low = input_ds.shape[0]
+    if unique_src.shape[0] != num_low:
+        write_log(f"\nLoading unique_src.npy to update the predictors, keeping only the points corresponding to the Low nodes (from {num_low} to {unique_src.shape[0]})", args, accelerator=None, mode='a')
+        unique_src = np.load(args.input_path + "unique_src.npy")
+        input_ds = input_ds[unique_src]
 
     n_vars = input_ds.shape[2]
     n_levels = input_ds.shape[3]

@@ -4,6 +4,8 @@ import torch
 import numpy as np
 import torch
 import ast
+import datetime
+import cftime
 
 ######################################################
 #------------------ GENERAL UTILITIES ---------------
@@ -41,31 +43,52 @@ def date_to_idxs_from_timeindex(
 ):
     """
     Compute start/end indices using the actual time_index array.
-    The time index must be sorted. The period [day_start, day_end]
-    can be obtain with [start_idx, end_idx)
-    Args:
-        time_index: numpy array datetime64
-    Returns:
-        start_idx: int
-        end_idx: int
+    Works with numpy.datetime64, Python datetime, and cftime calendars.
     """
 
-    # Build datetime64 timestamps
-    start_ts = np.datetime64(f"{year_start:04d}-{month_start:02d}-{day_start:02d}T00:00:00")
-    if year_end is not None:
-        end_ts = np.datetime64(f"{year_end:04d}-{month_end:02d}-{day_end:02d}T23:59:59")
+    # Detect reference type from the first element
+    ref = time_index[0]
 
-    # Find indices using binary search
-    # Note - np.searchsorted returns the insertion position that would keep the array sorted,
-    # even if the exact timestamp is not present.
-    start_idx = np.searchsorted(time_index, start_ts, side="left")
-    start_idx = int(start_idx)
+    # Build start timestamp in Python datetime ----
+    start_dt = datetime.datetime(year_start, month_start, day_start, 0, 0, 0)
+
+    # Build end timestamp if needed ----
     if year_end is not None:
-        end_idx   = np.searchsorted(time_index, end_ts,   side="right")
-        end_idx = int(end_idx) 
+        end_dt = datetime.datetime(year_end, month_end, day_end, 23, 59, 59)
+
+    # Convert Python datetime to same type as time_index
+    def convert(ts, ref):
+        # Case 1: time_index uses numpy.datetime64
+        if isinstance(ref, np.datetime64):
+            return np.datetime64(ts)
+
+        # Case 2: time_index uses Python datetime
+        if isinstance(ref, datetime.datetime):
+            return ts
+
+        # Case 3: time_index uses CFTime
+        if isinstance(ref, cftime.datetime):
+            return cftime.datetime(
+                ts.year, ts.month, ts.day,
+                ts.hour, ts.minute, ts.second,
+                calendar=ref.calendar
+            )
+
+        raise TypeError(f"Unsupported time index type: {type(ref)}")
+
+    start_ts = convert(start_dt, ref)
+    if year_end is not None:
+        end_ts = convert(end_dt, ref)
+
+    # Searchsorted
+    start_idx = int(np.searchsorted(time_index, start_ts, side="left"))
+
+    if year_end is not None:
+        end_idx = int(np.searchsorted(time_index, end_ts, side="right"))
         return start_idx, end_idx
-    else:
-        return start_idx
+
+    return start_idx
+
     
 
 def prepare_target_for_train(target, target_type, train_idxs, stats_path="", mode="minmax"):
