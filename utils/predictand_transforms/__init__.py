@@ -1,2 +1,2 @@
 from .predictand_transform import predictand_transform
-from .inverse_predictand_transform import inverse_predictand_transform
+from .predictand_inverse_transform import predictand_inverse_transform

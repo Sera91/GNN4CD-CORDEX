@@ -11,7 +11,7 @@ from accelerate import Accelerator
 
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import degree
-from graph_dataset import Graph_Dataset, custom_collate_fn_graph
+from data.datasets import Graph_Dataset, custom_collate_fn_graph
 
 from utils.helpers import date_to_idxs_from_timeindex, set_seed_everything
 from utils.helpers import write_log, standardize_input, invert_normalization
@@ -19,7 +19,7 @@ from utils.testing import Tester
 
 from models import build_model
 from utils.postprocessing import get_final_values
-from utils.transformations import predictant_inverse_transform
+from utils.predictand_transforms import predictant_inverse_transform
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 

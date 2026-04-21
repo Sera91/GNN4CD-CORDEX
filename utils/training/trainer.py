@@ -3,16 +3,15 @@ import numpy as np
 import pickle
 import time
 import wandb
-from utils.metrics.metrics import AverageMeter
-from utils.helpers.tools import write_log, invert_normalization
-from utils.plotting.plots import plot_maps, plot_pdf, get_cmap_dict
 import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import matplotlib
-import json
-from utils.helpers.tools import convert_dict
 from torch_geometric.data import HeteroData
+import json
+
+from utils.metrics import AverageMeter
+from utils.helpers import write_log, invert_normalization
 from utils.plotting import create_validation_plots
+from utils.postprocessing import get_final_values
+from utils.helpers import convert_dict
 
 #-----------------------------------------------------
 #---------------------- TRAIN ------------------------
@@ -131,7 +130,7 @@ class Trainer(object):
                             train_mask = train_mask.view(B, n_nodes)
 
                             y_pred_plot = torch.atleast_2d(y_pred_plot) # from (N,) to (1,N)
-                            y_plot = torch.atleast_2d(y_ploty)
+                            y_plot = torch.atleast_2d(y_plot)
                             idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
                             y_pred_plot_list.append(y_pred_plot) # time, nodes
                             y_plot_list.append(y_plot)
@@ -139,12 +138,61 @@ class Trainer(object):
 
                     ###### PLOTS ######
                     if log_val_plots:
-                        y_pred_plot_list_all = accelerator.gather(torch.stack(y_pred_plot_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
+                        y_pred_plot_all = accelerator.gather(torch.stack(y_pred_plot_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
                         y_plot_all = accelerator.gather(torch.stack(y_plot_list)).swapaxes(0,1)[:,:val_size]
                         idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]
 
+                        metadata_file_path="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_plot_params.json"
+                        with open(metadata_file_path) as f:
+                            meta = json.load(f)
+
+                        meta = convert_dict(meta)
+                        target_type = args.target_type
+                        
+                        lon = graph['high'].lon.cpu().numpy()
+                        lat = graph['high'].lat.cpu().numpy()
+
+                        # convert to cpu and numpy
+                        _, indices = torch.sort(idxs_all)
+                        indices = indices.cpu().numpy()
+                        times = times[indices]
+
                         # Create a few plots to compare
-                        create_validation_plots(y_pred_plot_list_all, y_plot_all, idxs_all, times, graph, accelerator, step, epoch, args)
+                        fig_avg, fig_bias, fig_pdf = create_validation_plots(
+                            y_pred_plot_all[indices], # to ensure they are sorted correctly
+                            y_plot_all[indices],
+                            lon,
+                            lat,
+                            args.target_type,
+                            meta
+                        )
+
+                        accelerator.log({
+                            "average": [wandb.Image(fig_avg)],
+                            "bias":  [wandb.Image(fig_bias)],
+                            "pdf": [wandb.Image(fig_pdf)],
+                            }, step=step)
+
+                        plt.close(fig_avg)
+                        plt.close(fig_bias)
+                        plt.close(fig_pdf)
+
+                        if epoch == (args.epochs-1): # last epoch
+                            data = HeteroData()
+                            if args.target_type == "precipitation":
+                                data.pr_gnn4cd = y_pred_plot
+                            elif args.target_type == "temperature":
+                                data.tasmax_gnn4cd = y_pred_plot
+                            
+                            data.target = y_plot
+
+                            data.times = times
+                            data.times_target = times
+                            data["high"].lat = lat
+                            data["high"].lon = lon
+
+                            with open(args.output_path + f"output_graph_{args.validation_year}.pkl", 'wb') as f:
+                                pickle.dump(data, f)
                             
                 accelerator.log({
                     'epoch':epoch,

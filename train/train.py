@@ -1,13 +1,13 @@
 import torch
 import numpy as np
 import pickle
-from data.datasets import Graph_Dataset, custom_collate_fn_graph
 import time
 import argparse
 import os
 import importlib
 import json
 import random
+from accelerate import Accelerator
 
 from utils.losses import MSE_QMSE_PSD_Loss
 from utils.losses import GaussianNLLLoss
@@ -17,9 +17,9 @@ from utils.helpers import find_not_all_nan_times, derive_train_val_idxs, derive_
 from utils.helpers import compute_input_statistics_and_standardize, derive_qmse_bins
 from utils.helpers import prepare_target_for_train
 from utils.training import Trainer
-from accelerate import Accelerator
-from utils.models import build_GNN4CD_model
-from utils.transformations import predictant_transforms
+from utils.predictand_transforms import predictand_transform
+from data.datasets import Graph_Dataset, custom_collate_fn_graph
+from models import build_model
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -276,9 +276,9 @@ if __name__ == '__main__':
     if args.loss_fn == "BernoulliGammaNLLLoss":
         target_prepared = target
     else:
-        target_prepared = predictant_transform(
+        target_prepared = predictand_transform(
             target,
-            mode=args.predictant_transform,      # e.g. "log1p", "z_score", "minmax"
+            mode=args.predictand_transform,      # e.g. "log1p", "z_score", "minmax"
             stats_path=args.output_path
         )
 
@@ -386,7 +386,7 @@ if __name__ == '__main__':
     #-----------------------------------------------------
   
     # Create two different datasets for efficiency
-    graph_dataset_train_tmp = Graph_dataset(
+    graph_dataset_train_tmp = Graph_Dataset(
         low_high_graph,
         low_input_train,
         high_input_std,
@@ -395,7 +395,7 @@ if __name__ == '__main__':
     )
 
     if args.validation_year is not None or args.val_years is not None:
-        graph_dataset_val_tmp = Graph_dataset(
+        graph_dataset_val_tmp = Graph_Dataset(
             low_high_graph,
             low_input_val,
             high_input_std,

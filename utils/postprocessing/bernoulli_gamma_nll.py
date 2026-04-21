@@ -1,5 +1,6 @@
 from .registry import register_extractor
 import torch.nn.functional as F
+import torch
 
 @register_extractor("bernoulli_gamma_nll")
 def extract_bg_mean(y_out):

@@ -1,24 +1,22 @@
 import pickle
 import torch
-import numpy
+import numpy as np
+
+from utils.plotting import plot_maps, plot_pdf, get_cmap_dict
+import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+import matplotlib
+import wandb
 
 def create_validation_plots(
-    y_pred_plot, y_plot, t, times, graph, accelerator, step, epoch, args, binmax=350,
-    metadata_file_path="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_plot_params.json"):
-
-    with open(metadata_file_path) as f:
-        meta = json.load(f)
-
-    meta = convert_dict(meta)
-    target_type = args.target_type
-    
-    lon = graph['high'].lon.cpu().numpy()
-    lat = graph['high'].lat.cpu().numpy()
-
-    # convert to cpu and numpy
-    _, indices = torch.sort(t)
-    indices = indices.cpu().numpy()
-    times = times[indices]
+    y_pred_plot,
+    y_plot,
+    lon,
+    lat,
+    target_type,
+    meta,
+    binmax=350,
+    ):
 
     y_pred_pdf = y_pred_plot.flatten()
     y_pdf = y_plot.flatten()
@@ -122,30 +120,7 @@ def create_validation_plots(
         tail_zoom=meta[target_type]["tail_zoom"],
         legend_outside=meta[target_type]["legend_outside"]
     )
-
-    accelerator.log({
-        meta[target_type]["map_title"]: [wandb.Image(fig_avg)],
-        "bias":  [wandb.Image(fig_bias)],
-        "pdf": [wandb.Image(fig_pdf)],
-        }, step=step)
     
-    plt.close(fig_avg)
-    plt.close(fig_bias)
-    plt.close(fig_pdf)
+    return fig_avg, fig_bias, fig_pdf
 
-    if epoch == (args.epochs-1): # last epoch
-        data = HeteroData()
-        if args.target_type == "precipitation":
-            data.pr_gnn4cd = y_pred_plot
-        elif args.target_type == "temperature":
-            data.tasmax_gnn4cd = y_pred_plot
-        
-        data.target = y_plot
 
-        data.times = times
-        data.times_target = times
-        data["high"].lat = lat
-        data["high"].lon = lon
-
-        with open(args.output_path + f"output_graph_{args.validation_year}.pkl", 'wb') as f:
-            pickle.dump(data, f)

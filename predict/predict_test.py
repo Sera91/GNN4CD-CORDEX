@@ -8,17 +8,15 @@ import os
 import importlib
 from accelerate import Accelerator
 from torch_geometric.data import HeteroData
-
-from dataset import Graph_Dataset, custom_collate_fn_graph
-
-from utils.helpers.tools import set_seed_everything
-from data.loaders.complete_loader import load_dataset_CORDEXML
-from utils.helpers.tools import write_log
-from utils.testing.test_NLL import NLL_Tester
-from utils.testing.test import Tester
-from utils.helpers.tools import write_log, standardize_input, invert_normalization, date_to_idxs_from_timeindex
-
 import xarray as xr
+
+from data.datasets import Graph_Dataset, custom_collate_fn_graph
+from data.loaders import load_dataset_CORDEXML
+from utils.testing import Tester
+from utils.helpers import set_seed_everything, write_log, standardize_input, invert_normalization, date_to_idxs_from_timeindex
+from models import build_model
+from utils.postprocessing import get_final_values
+from utils.predictand_transforms import predictant_inverse_transform
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -259,25 +257,30 @@ if __name__ == '__main__':
     n_static_high = high_input_std.shape[1]
     write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
 
-    #-- Model
-    models = importlib.import_module(f"models.{args.model_name}")
-    Model = getattr(models, args.model_name)
-    model_R = Model(h_in=n_vars*n_levels, h_hid=n_vars*n_levels, high_in=n_static_high, seq_length=seq_length)
+    model = build_model(
+        model_name=args.model_name,
+        loss_type=args.loss_type,
+        h_in=n_vars * n_levels,
+        h_hid=n_vars * n_levels,
+        high_in=n_static_high,
+        seq_length=seq_length,
+    )
+
 
     #-----------------------------------------------------
     #------------------ LOAD CHECKPOINT ------------------
     #-----------------------------------------------------
 
     if accelerator is None:
-        checkpoint_R = torch.load(args.train_path + args.checkpoint_R, map_location=torch.device('cpu'), weights_only=True)
+        checkpoint = torch.load(args.train_path + args.checkpoint_R, map_location=torch.device('cpu'), weights_only=True)
         device = 'cpu'
     else:
-        checkpoint_R = torch.load(args.train_path + args.checkpoint_R + "/pytorch_model.bin", weights_only=True)
+        checkpoint = torch.load(args.train_path + args.checkpoint_R + "/pytorch_model.bin", weights_only=True)
         device = accelerator.device
     
     write_log("\nLoading state dict.", args, accelerator, 'a')
     
-    model_R.load_state_dict(checkpoint_R)
+    model.load_state_dict(checkpoint)
 
     #-----------------------------------------------------
     #-------------- DATASET AND DATALOADER ---------------
@@ -307,7 +310,7 @@ if __name__ == '__main__':
     #-----------------------------------------------------
 
     if accelerator is not None:
-        model_R, dataloader = accelerator.prepare(model_R, dataloader)
+        model, dataloader = accelerator.prepare(model, dataloader)
 
     #-----------------------------------------------------
     #----------------------- TEST ------------------------
@@ -317,25 +320,19 @@ if __name__ == '__main__':
               f"{time_index_test[test_idxs_valid_subset.min()]} to idx {time_index_test[test_idxs_valid_subset.max()]}.", args, accelerator, 'a')
 
     start = time.time()
-
-    if args.model_name == "GNN4CD_model_mod1_GaussianNLL":
-        y_pred, sigma_pred, idxs = NLL_Tester().test_GaussianNLL(
-            model_R, dataloader, args=args, accelerator=accelerator
-        )
-    elif args.model_name == "GNN4CD_model_mod1_BernoulliGammaNLL":
-        y_pred, idxs = NLL_Tester().test_BernoulliGammaNLL(
-            model_R, dataloader, args=args, accelerator=accelerator
-        )
-    else:
-        y_pred, idxs = Tester().test(
-            model_R, dataloader, args=args, accelerator=accelerator
-        )
-    
+    y_out, idxs = Tester.test(model, dataloader, args=args, accelerator=accelerator)
     end = time.time()
 
     write_log(f"\nTest Done! \nNow post-processing results.", args, accelerator, 'a')
 
     # POST PROCESS PREDICTIONS
+
+    y_pred = get_final_values(target=None, y_out=y_out, args=args)[1] # y_out to e.g. mu, sigma
+
+    y_pred = predictant_inverse_transform( # from raw model prediction to actual pr/tasmax values
+        y_pred,
+        stats_path=args.stats_path
+    )
 
     if accelerator is not None:
         accelerator.wait_for_everyone()
@@ -352,16 +349,9 @@ if __name__ == '__main__':
         y_pred = y_pred.swapaxes(0,1).cpu().numpy()[:,indices] # (nodes, times)
         print(f"[Rank {accelerator.process_index}] y_pred.shape (after gather): {y_pred.shape}")
         
-        if args.model_name == "GNN4CD_model_mod1_GaussianNLL":
-            sigma_pred = accelerator.gather(sigma_pred)[: len(graph_dataset),:]
-            sigma_pred = sigma_pred.swapaxes(0,1).cpu().numpy()[:,indices]
 
     if args.target_type == "precipitation":
-        if args.model_name != "GNN4CD_model_mod1_BernoulliGammaNLL":
-            y_pred = np.where(np.isfinite(np.expm1(y_pred)), np.expm1(y_pred), np.nan)
         y_pred[y_pred<THRESHOLD] = 0.0
-    elif args.target_type == "temperature":
-        y_pred = invert_normalization(y_pred, stats_path=args.train_path)
 
     # LON LAT
     lat_low = low_high_graph["low"].lat.cpu().numpy()
@@ -393,9 +383,6 @@ if __name__ == '__main__':
     data["low"].lon = lon_low
     data["high"].lat = lat_high
     data["high"].lon = lon_high
-
-    if "NLL" in args.model_name:
-        data.sigma_gnn4cd = sigma_pred
 
     write_log(f"\nDone. Testing concluded in {end-start} seconds.\nWrite the files.", args, accelerator, 'a')
 
