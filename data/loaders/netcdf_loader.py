@@ -12,15 +12,11 @@ def read_dataset(path):
 
     ds = xr.open_dataset(path, engine='netcdf4')
 
-    # -----------------------------
     # Case 1: Dataset has NO time dimension
-    # -----------------------------
     if "time" not in ds.dims and "time" not in ds.coords and "valid_time" not in ds.dims and "valid_time" not in ds.coords:
         return ds, None, None
 
-    # -----------------------------
     # Case 2: Dataset has a time dimension
-    # -----------------------------
     try:
         time = ds["time"].to_index()
     except:

@@ -98,7 +98,6 @@ HIGH_INDEPENDENT_VARS = True
 if __name__ == '__main__':
 
     args = parser.parse_args()
-
     
     # Set all seeds
     set_seed_everything(seed=args.seed)

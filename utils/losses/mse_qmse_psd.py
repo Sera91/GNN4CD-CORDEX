@@ -1,6 +1,6 @@
 import torch.nn as nn
-from utils.loss_functions.psd import PSDLoss
-from utils.loss_functions.qmse import QMSELoss
+from utils.losses import PSDLoss
+from utils.losses import QMSELoss
 
 
 class MSE_QMSE_PSD_Loss(nn.Module):

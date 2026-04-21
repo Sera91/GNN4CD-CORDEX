@@ -116,7 +116,7 @@ def prepare_target_for_train(target, target_type, train_idxs, stats_path="", mod
 
 
 def invert_normalization(y_norm, sigma_norm=None, stats_path=None):
-    stats = np.load(stats_path+"tasmax_norm_stats.npz")
+    stats = np.load(stats_path+"normalization_stats.npz")
     if stats["mode"] == "minmax":
         min_val_temp = stats["min"]
         max_val_temp = stats["max"]

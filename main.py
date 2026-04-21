@@ -9,17 +9,17 @@ import importlib
 import json
 import random
 
-from utils.loss_functions.mse_qmse_psd import MSE_QMSE_PSD_Loss
-from utils.loss_functions.gaussian_nll import GaussianNLLLoss
-from utils.loss_functions.bernoulli_gamma_nll import BernoulliGammaNLLLoss
-from utils.helpers.tools import write_log, check_freezed_layers, set_seed_everything
-from utils.helpers.tools import find_not_all_nan_times, derive_train_val_idxs, derive_train_val_idxs_years_list
-from utils.helpers.tools import compute_input_statistics_and_standardize, derive_qmse_bins
-from utils.helpers.tools import prepare_target_for_train
-from utils.training.train_nll import NLL_Trainer
-from utils.training.train_bernoulli_gamma_nll import BernoulliGamma_NLL_Trainer
-from utils.training.train_mse_qmse_psd import MSE_QMSE_PSD_Trainer
+from utils.losses import MSE_QMSE_PSD_Loss
+from utils.losses import GaussianNLLLoss
+from utils.losses import BernoulliGammaNLLLoss
+from utils.helpers import write_log, check_freezed_layers, set_seed_everything
+from utils.helpers import find_not_all_nan_times, derive_train_val_idxs, derive_train_val_idxs_years_list
+from utils.helpers import compute_input_statistics_and_standardize, derive_qmse_bins
+from utils.helpers import prepare_target_for_train
+from utils.training import Trainer
 from accelerate import Accelerator
+from utils.models import build_GNN4CD_model
+from utils.transformations import predictant_transforms
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -276,12 +276,18 @@ if __name__ == '__main__':
     if args.loss_fn == "BernoulliGammaNLLLoss":
         target_prepared = target
     else:
-        target_prepared = prepare_target_for_train(
-            target=target,
-            target_type=args.target_type,
-            train_idxs=train_idxs[train_idxs_valid_subset],
+        target_prepared = predictant_transform(
+            target,
+            mode=args.predictant_transform,      # e.g. "log1p", "z_score", "minmax"
             stats_path=args.output_path
         )
+
+        # target_prepared = prepare_target_for_train(
+        #     target=target,
+        #     target_type=args.target_type,
+        #     train_idxs=train_idxs[train_idxs_valid_subset],
+        #     stats_path=args.output_path
+        # )
 
     #-- Step 4 - Compute QMSE bins
     if "QMSE" in args.loss_fn:
@@ -366,10 +372,14 @@ if __name__ == '__main__':
     n_static_high = high_input_std.shape[1]
     write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
 
-    # Model
-    models = importlib.import_module(f"models.{args.model_name}")
-    Model = getattr(models, args.model_name)
-    model = Model(h_in=n_vars*n_levels, h_hid=n_vars*n_levels, high_in=n_static_high, seq_length=seq_length)
+    model = build_model(
+        model_name=args.model_name,
+        loss_type=args.loss_fn,
+        h_in=n_vars * n_levels,
+        h_hid=n_vars * n_levels,
+        high_in=n_static_high,
+        seq_length=seq_length,
+    )
    
     #-----------------------------------------------------
     #-------------- DATASET AND DATALOADER ---------------
@@ -487,23 +497,15 @@ if __name__ == '__main__':
     write_log(f"\nUsing lr={optimizer.param_groups[0]['lr']:.8f}, " +
                 f"weight decay = {args.weight_decay} and epochs={args.epochs}." + 
                 f"\nloss: {loss_fn}", args, accelerator, 'a') 
-    if accelerator is None:
-        write_log(f"\nModel = {args.model_name}, batch size = {args.batch_size}", args, accelerator, 'a') 
-    else:
-        write_log(f"\nModel = {args.model_name}, batch size = {args.batch_size*torch.cuda.device_count()}", args, accelerator, 'a')
-
-    start = time.time()
+    
+    effective_batch_size = args.batch_size if accelerator is None else args.batch_size*torch.cuda.device_count()
+    write_log(f"\nModel = {args.model_name}, batch size = {effective_batch_size}", args, accelerator, 'a')
 
     val_size = len(dataset_graph_val)
 
-    if args.loss_fn == "GaussianNLLLoss":
-        train_fn = NLL_Trainer().train_reg
-    elif args.loss_fn == "BernoulliGammaNLLLoss":
-        train_fn = BernoulliGamma_NLL_Trainer().train_reg
-    elif args.loss_fn == "MSE_QMSE_PSD_Loss":
-        train_fn = MSE_QMSE_PSD_Trainer().train_reg
+    start = time.time()    
 
-    train_fn(
+    Trainer.train(
         model,
         dataloader_train,
         dataloader_val,
