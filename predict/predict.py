@@ -11,7 +11,7 @@ from accelerate import Accelerator
 
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import degree
-from dataset import Dataset_Graph, custom_collate_fn_graph
+from graph_dataset import Graph_Dataset, custom_collate_fn_graph
 
 from utils.helpers import date_to_idxs_from_timeindex, set_seed_everything
 from utils.helpers import write_log, standardize_input, invert_normalization
@@ -261,7 +261,7 @@ if __name__ == '__main__':
     #-----------------------------------------------------
     
     write_log(f"\nDefining dataset and dataloader.", args, accelerator, 'a')
-    dataset_graph_tmp = Dataset_Graph(
+    graph_dataset_tmp = Graph_Dataset(
         low_input=low_input_test_std,
         high_input=high_input_std,
         graph=low_high_graph,
@@ -269,10 +269,10 @@ if __name__ == '__main__':
         history_length=history_length,
     )
 
-    dataset_graph = torch.utils.data.Subset(dataset_graph_tmp, test_idxs_valid_subset) # it's just a view of the original dataset
+    graph_dataset = torch.utils.data.Subset(graph_dataset_tmp, test_idxs_valid_subset) # it's just a view of the original dataset
 
     dataloader = torch.utils.data.DataLoader(
-        dataset_graph,
+        graph_dataset,
         batch_size=args.batch_size,
         shuffle=False,
         collate_fn=custom_collate_fn_graph,
@@ -350,12 +350,12 @@ if __name__ == '__main__':
 
         # Gather the values in *tensor* across all processes and concatenate them on the first dimension. Useful to
         # regroup the predictions from all processes when doing evaluation.
-        idxs = accelerator.gather(idxs)[: len(dataset_graph)]
+        idxs = accelerator.gather(idxs)[: len(graph_dataset)]
         idxs, indices = torch.sort(idxs)
         idxs = idxs.cpu().numpy()
         indices = indices.cpu().numpy()
 
-        y_pred = accelerator.gather(y_pred)[: len(dataset_graph),:] # (times, nodes)
+        y_pred = accelerator.gather(y_pred)[: len(graph_dataset),:] # (times, nodes)
         y_pred = y_pred.swapaxes(0,1).cpu().numpy()[:,indices] # (nodes, times)
         print(f"[Rank {accelerator.process_index}] y_pred.shape (after gather): {y_pred.shape}")
 

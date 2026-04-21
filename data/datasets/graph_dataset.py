@@ -11,7 +11,7 @@ import copy
 import torch_geometric.transforms as T
 transform = T.AddLaplacianEigenvectorPE(k=2)
 
-class Dataset_Graph(Dataset):
+class Graph_Dataset(Dataset):
 
     def __init__(
         self,
@@ -31,21 +31,12 @@ class Dataset_Graph(Dataset):
         for key, value in kwargs.items():
             setattr(self, key, value)
             self.additional_feature_keys.append(key)
-        # self._check_temporal_consistency()
         self._set_graph_static_high_x(high_input)
-        #self._add_node_degree()
 
     def __len__(self):
         if self.target is not None:
             return len(self.target)
         
-    # def _check_temporal_consistency(self):
-    #     if self.target is not None:
-    #         assert (self.low_input.shape[1]-self.history_length) == self.target.shape[1], "Temporal dimension inconsistency."
-
-    # def _set_snapshot_count(self):
-    #     self.snapshot_count = len(self)
-    
     def _get_high_nodes_degree(self, snapshot):
         node_degree = (degree(snapshot['high','within','high'].edge_index[0], snapshot['high'].num_nodes) / 8).unsqueeze(-1)
         return node_degree
@@ -103,39 +94,7 @@ class Dataset_Graph(Dataset):
             elif value.shape[0] == self.graph['low'].x.shape[0]:
                 snapshot['high'][key] = value
 
-        #snapshot['high'].laplacian_eigenvector_pe = self.graph['high'].laplacian_eigenvector_pe     
-        #snapshot['high'].deg = self._get_high_nodes_degree(snapshot)
-
         return snapshot
-    
-
-# class Sampler_Graph(Sampler):
-#     def __init__(
-#             self, shuffle, dataset, idxs_vector=None, skip=0):
-        
-#         self.shuffle = shuffle
-#         self.idxs_vector = idxs_vector
-#         self.dataset_len = len(dataset)
-#         self.skip = skip
-#         self.idx_max = self.dataset_len + skip
-
-#         # build full index list
-#         if self.idxs_vector is not None:
-#             indices = self.idxs_vector.clone()
-#         else:
-#             indices = torch.arange(self.skip, self.idx_max)
-
-#         if self.shuffle:
-#             perm = torch.randperm(len(indices))
-#             indices = indices[perm]
-
-#         self.indices = indices
-
-#     def __iter__(self):
-#         return iter(self.indices)
-
-#     def __len__(self):
-#         return len(self.indices)
 
 def custom_collate_fn_graph(batch_list):
     return Batch.from_data_list(batch_list)

@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import pickle
-from dataset import Dataset_Graph, custom_collate_fn_graph
+from data.datasets import Graph_Dataset, custom_collate_fn_graph
 import time
 import argparse
 import os
@@ -67,7 +67,7 @@ parser.add_argument('--n_gpu', type=int, default=4)
 
 parser.add_argument('--model_type', type=str)
 parser.add_argument('--model_name', type=str, default='HiResPrecipNet')
-parser.add_argument('--dataset_name', type=str, default='Dataset_Graph')
+parser.add_argument('--dataset_name', type=str, default='graph_dataset')
 parser.add_argument('--collate_name', type=str)
 
 parser.add_argument('--stats_mode', type=str, default="var")
@@ -386,7 +386,7 @@ if __name__ == '__main__':
     #-----------------------------------------------------
   
     # Create two different datasets for efficiency
-    dataset_graph_train_tmp = Dataset_Graph(
+    graph_dataset_train_tmp = Graph_dataset(
         low_high_graph,
         low_input_train,
         high_input_std,
@@ -395,7 +395,7 @@ if __name__ == '__main__':
     )
 
     if args.validation_year is not None or args.val_years is not None:
-        dataset_graph_val_tmp = Dataset_Graph(
+        graph_dataset_val_tmp = Graph_dataset(
             low_high_graph,
             low_input_val,
             high_input_std,
@@ -404,23 +404,23 @@ if __name__ == '__main__':
         )
 
     if "QMSE" in args.loss_fn:
-        dataset_graph_train_tmp.set_additional_features(w=target_bins_train)
+        graph_dataset_train_tmp.set_additional_features(w=target_bins_train)
         if args.validation_year is not None:
-            dataset_graph_val_tmp.set_additional_features(w=target_bins_val)
+            graph_dataset_val_tmp.set_additional_features(w=target_bins_val)
 
-    dataset_graph_train = torch.utils.data.Subset(dataset_graph_train_tmp, train_idxs_valid_subset) # it's just a view of the original dataset
+    graph_dataset_train = torch.utils.data.Subset(graph_dataset_train_tmp, train_idxs_valid_subset) # it's just a view of the original dataset
     if args.validation_year is not None:
-        dataset_graph_val = torch.utils.data.Subset(dataset_graph_val_tmp, val_idxs_valid_subset)
+        graph_dataset_val = torch.utils.data.Subset(graph_dataset_val_tmp, val_idxs_valid_subset)
         
-    # len(dataset_graph_train) will be the number of training exaples (inputs are bigger, considering the history length)
+    # len(graph_dataset_train) will be the number of training exaples (inputs are bigger, considering the history length)
     if args.validation_year is not None:
-        write_log(f'\nTrainset size = {len(dataset_graph_train)}, validationset size = {len(dataset_graph_val)}.', args, accelerator, 'a')
+        write_log(f'\nTrainset size = {len(graph_dataset_train)}, validationset size = {len(graph_dataset_val)}.', args, accelerator, 'a')
     else:
-        write_log(f'\nTrainset size = {len(dataset_graph_train)}.', args, accelerator, 'a')
+        write_log(f'\nTrainset size = {len(graph_dataset_train)}.', args, accelerator, 'a')
 
     # Define the dataloaders
     dataloader_train = torch.utils.data.DataLoader(
-        dataset_graph_train,
+        graph_dataset_train,
         batch_size=args.batch_size,
         shuffle=True,
         collate_fn=custom_collate_fn_graph,
@@ -429,7 +429,7 @@ if __name__ == '__main__':
 
     if args.validation_year is not None:
         dataloader_val = torch.utils.data.DataLoader(
-            dataset_graph_val,
+            graph_dataset_val,
             batch_size=1,
             shuffle=False,
             collate_fn=custom_collate_fn_graph,
@@ -501,7 +501,7 @@ if __name__ == '__main__':
     effective_batch_size = args.batch_size if accelerator is None else args.batch_size*torch.cuda.device_count()
     write_log(f"\nModel = {args.model_name}, batch size = {effective_batch_size}", args, accelerator, 'a')
 
-    val_size = len(dataset_graph_val)
+    val_size = len(graph_dataset_val)
 
     start = time.time()    
 
