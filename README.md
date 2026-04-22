@@ -17,6 +17,7 @@ This folder contains the refactored code. Main modifications:
     - log1p
     - minmax
     - zscore
+    
     The `transform_predictand` function eventually (minmax, zscore) computes the stats on the traning_idxs subset and
     applyes the transformation to the predictand. Is stats_save_file is provided, it saves the stats to disk.
     The `inverse_transform_predictand` eventually (minmax, zscore) takes the given stats and
@@ -27,6 +28,7 @@ This folder contains the refactored code. Main modifications:
     transformations, which are (so far):
     - zscore_low_var
     - zscore_high_independent
+
     The `transform_predictors` function accepts in input the precomputed stats on the predictors (x_low and x_high).
     If stats are not provided (training), it first computes the stats on the traning_idxs subset and then
     applyes the transformation to the predictand. Is stats_save_file is provided, it saves the stats to disk.
