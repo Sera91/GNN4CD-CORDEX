@@ -89,51 +89,6 @@ def date_to_idxs_from_timeindex(
 
     return start_idx
 
-    
-
-def prepare_target_for_train(target, target_type, train_idxs, stats_path="", mode="minmax"):
-    target_train = target[:, train_idxs]
-    if target_type == "precipitation":
-        return np.log1p(target)
-    elif target_type == "temperature":
-        if mode == "minmax":
-            min_val_temp = int(np.floor(np.nanmin(target)))
-            max_val_temp = int(np.ceil(np.nanmax(target)))
-            np.savez(stats_path+"tasmax_norm_stats.npz", mode="minmax", min=min_val_temp, max=max_val_temp)
-            return (target - min_val_temp) / (max_val_temp - min_val_temp)
-        elif mode == "z_score":
-            mean_all = np.nanmean(target_train)
-            std_all = np.nanstd(target_train)
-            np.savez(stats_path+"tasmax_norm_stats.npz", mode=mode, mean=mean_all, std=std_all)
-            return (target - mean_all) / std_all
-        elif mode == "z_score_gp":
-            mean_grid_points = np.nanmean(target_train, axis=1)[:, None]
-            std_grid_points = (np.nanstd(target_train, axis=1) + 1e-6)[:, None]
-            np.savez(stats_path+"tasmax_norm_stats.npz", mode=mode, mean=mean_grid_points, std=std_grid_points)
-            return (target - mean_grid_points) / std_grid_points
-    else:
-        raise ValueError(f"Unknown target type: {target_type}")
-
-
-def invert_normalization(y_norm, sigma_norm=None, stats_path=None):
-    stats = np.load(stats_path+"normalization_stats.npz")
-    if stats["mode"] == "minmax":
-        min_val_temp = stats["min"]
-        max_val_temp = stats["max"]
-        y_pred = y_norm * (max_val_temp - min_val_temp) + min_val_temp
-        if sigma_norm is not None:
-            sigma_pred = sigma_norm * (max_val_temp - min_val_temp)
-    elif stats["mode"] == "z_score" or stats["mode"] == "z_score_gp":
-        mean = stats["mean"]
-        std  = stats["std"]
-        y_pred = y_norm * std + mean
-        if sigma_norm is not None:
-            sigma_pred = sigma_norm * std
-    if sigma_norm is not None:
-        return y_pred, sigma_pred
-    else:
-        return y_pred
-
 
 def find_not_all_nan_times(target_train, skip=24):
     """

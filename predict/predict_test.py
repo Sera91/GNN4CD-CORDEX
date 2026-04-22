@@ -44,7 +44,7 @@ parser.add_argument('--stats_mode', type=str, default="var")
 parser.add_argument('--procedure', type=str, default='z-score')
 parser.add_argument('--seed', type=int, default=80)
 parser.add_argument('--batch_size', type=int)
-parser.add_argument('--checkpoint_R', type=str, default=None)
+parser.add_argument('--checkpoint', type=str, default=None)
 parser.add_argument('--orog_file', type=str, default=None)
 parser.add_argument('--mask_sealand_file', type=str, default=None)
 parser.add_argument('--coords_ij_file', type=str, default=None)
@@ -272,10 +272,10 @@ if __name__ == '__main__':
     #-----------------------------------------------------
 
     if accelerator is None:
-        checkpoint = torch.load(args.train_path + args.checkpoint_R, map_location=torch.device('cpu'), weights_only=True)
+        checkpoint = torch.load(args.train_path + args.checkpoint, map_location=torch.device('cpu'), weights_only=True)
         device = 'cpu'
     else:
-        checkpoint = torch.load(args.train_path + args.checkpoint_R + "/pytorch_model.bin", weights_only=True)
+        checkpoint = torch.load(args.train_path + args.checkpoint + "/pytorch_model.bin", weights_only=True)
         device = accelerator.device
     
     write_log("\nLoading state dict.", args, accelerator, 'a')

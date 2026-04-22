@@ -1,8 +1,10 @@
 import torch.nn as nn
 from utils.losses import PSDLoss
 from utils.losses import QMSELoss
+from .registry import register_loss
 
 
+@register_loss("MSE_QMSE_PSD_Loss")
 class MSE_QMSE_PSD_Loss(nn.Module):
     def __init__(
         self,

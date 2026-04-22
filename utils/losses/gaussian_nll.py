@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
+from .registry import register_loss
 
 
+@register_loss("GaussianNLLLoss")
 class GaussianNLLLoss(nn.Module):
     def __init__(self, eps=1e-6):
         super().__init__()

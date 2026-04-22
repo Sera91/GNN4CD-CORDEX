@@ -1,15 +1,12 @@
-# utils/transformations/inverse_transform_predictand.py
-
 import numpy as np
 from .registry import PREDICTAND_INVERSE_TRANSFORM_REGISTRY
 
-def predictand_inverse_transform(values_norm, stats_path):
+def inverse_transform_predictand(values_norm, stats):
     """
     Apply inverse transformation to model outputs or normalized targets.
     Loads stats saved during training.
     """
-    stats = np.load(stats_path, allow_pickle=True)
-
+    
     mode = stats["mode"]
     if isinstance(mode, np.ndarray):
         mode = mode.item()

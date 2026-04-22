@@ -29,7 +29,7 @@ conda activate ${ENV_PATH}
 cd ${MAIN_PATH}
 
 ## training
-python -m accelerate.commands.launch --config_file ${ACCELERATE_CONFIG_PATH} main.py \
+accelerate launch --config_file ${ACCELERATE_CONFIG_PATH} train/train.py \
 --seed=${SEED} \
 --input_path=${INPUT_PATH} \
 --output_path=${OUTPUT_PATH} \

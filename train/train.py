@@ -17,9 +17,10 @@ from utils.helpers import find_not_all_nan_times, derive_train_val_idxs, derive_
 from utils.helpers import compute_input_statistics_and_standardize, derive_qmse_bins
 from utils.helpers import prepare_target_for_train
 from utils.training import Trainer
-from utils.predictand_transforms import predictand_transform
 from data.datasets import Graph_Dataset, custom_collate_fn_graph
 from models import build_model
+from utils.predictand_transforms import transform_predictand
+from utils.predictor_transforms import transform_predictors
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -151,7 +152,7 @@ if __name__ == '__main__':
         low_high_graph = pickle.load(f)
 
     #-- 2. Low res input
-    low_input = np.load(args.input_path+args.low_input_file)
+    x_low = np.load(args.input_path+args.low_input_file)
 
     #-- 3. Target
     target = np.load(args.input_path+args.target_file)
@@ -198,8 +199,8 @@ if __name__ == '__main__':
     
     seq_length = history_length + 1 # total length of the sequence for the RNN model
     
-    n_vars = low_input.shape[2]
-    n_levels = low_input.shape[3]
+    n_vars = x_low.shape[2]
+    n_levels = x_low.shape[3]
 
 #-----------------------------------------------------
 #----------------------- LOSS ------------------------
@@ -274,20 +275,13 @@ if __name__ == '__main__':
 
     #-- Step 1 - Prepare target
     if args.loss_fn == "BernoulliGammaNLLLoss":
-        target_prepared = target
+        target_trans = target
     else:
-        target_prepared = predictand_transform(
+        target_trans = transform_predictand(
             target,
-            mode=args.predictand_transform,      # e.g. "log1p", "z_score", "minmax"
-            stats_path=args.output_path
+            mode=args.predictand_transform_mode,      # e.g. "log1p", "z_score", "minmax"
+            stats_save_path=args.output_path + "predictand_stats.npz"
         )
-
-        # target_prepared = prepare_target_for_train(
-        #     target=target,
-        #     target_type=args.target_type,
-        #     train_idxs=train_idxs[train_idxs_valid_subset],
-        #     stats_path=args.output_path
-        # )
 
     #-- Step 4 - Compute QMSE bins
     if "QMSE" in args.loss_fn:
@@ -301,7 +295,7 @@ if __name__ == '__main__':
             binwidth = args.binwidth
 
         target_bins = derive_qmse_bins(
-            target_prepared,
+            target_trans,
             train_idxs[train_idxs_valid_subset],
             args,
             accelerator,
@@ -312,55 +306,55 @@ if __name__ == '__main__':
         
     #-- Step 5 - Compute input statistics + standardize
     # At this point the high input coincides to orog, then mask and ij are added
-    low_input_std, high_input_std = compute_input_statistics_and_standardize(
-        x_low=low_input,
+    x_low_std, x_high_std = transform_predictors(
+        x_low,
         x_high=orog,
         train_idxs=train_idxs,
-        n_vars=n_vars,
-        apply_stats=True,
-        high_independent_vars=HIGH_INDEPENDENT_VARS,
-        args=args,
-        accelerator=accelerator
+        mode_low=args.predictor_low_tranform_mode,      # e.g. "zscore_lowres_var"
+        mode_high=args.predictor_high_transform_mode,    # e.g. "zscore_highres_grouped"
+        stats=None,
+        stats_save_path=args.output_path + "predictors_stats.npz"
     )
+
     
     #-- Step 6. Add the other high-res features
     if use_mask_sealand:
-        high_input_std = np.concatenate((high_input_std, mask_sealand), axis=-1)
+        x_high_std = np.concatenate((x_high_std, mask_sealand), axis=-1)
         write_log(f"\nAdding mask sea-land node features", args, accelerator, 'a')
 
     if use_coords_ij:
-        high_input_std = np.concatenate((high_input_std, coords_ij), axis=-1)
+        x_high_std = np.concatenate((x_high_std, coords_ij), axis=-1)
         write_log(f"\nAdding ij node features", args, accelerator, 'a')
 
     #-- Step 7 - torch tensors from numpy arrays
-    target_prepared = torch.from_numpy(target_prepared).float()
+    target_trans = torch.from_numpy(target_trans).float()
     train_idxs = torch.from_numpy(train_idxs).int()
     if args.validation_year is not None:
         val_idxs = torch.from_numpy(val_idxs).int()
     if "QMSE" in args.loss_fn:
         target_bins = torch.from_numpy(target_bins).int()
-    low_input_std = torch.from_numpy(low_input_std).float()
-    high_input_std = torch.from_numpy(high_input_std).float()
+    x_low_std = torch.from_numpy(x_low_std).float()
+    x_high_std = torch.from_numpy(x_high_std).float()
     
-    low_input_std = torch.flatten(low_input_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
-    low_input_train = low_input_std[:, train_idxs, :]
-    target_train = target_prepared[:, train_idxs]
+    x_low_std = torch.flatten(x_low_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
+    x_low_std_train = x_low_std[:, train_idxs, :]
+    target_train = target_trans[:, train_idxs]
     if "QMSE" in args.loss_fn:
         target_bins_train = target_bins[:, train_idxs]
 
     if args.validation_year is not None:
-        low_input_val = low_input_std[:, val_idxs, :]
-        target_val = target_prepared[:, val_idxs]
+        x_low_std_val = x_low_std[:, val_idxs, :]
+        target_val = target_trans[:, val_idxs]
         if "QMSE" in args.loss_fn:
             target_bins_val = target_bins[:, val_idxs]
 
     if accelerator.is_main_process:
-        print(f"low_input_train.shape: {low_input_train.shape}")
+        print(f"x_low_std_train.shape: {x_low_std_train.shape}")
         print(f"target_train.shape: {target_train.shape}")
         if "QMSE" in args.loss_fn:
             print(f"target_bins_train.shape: {target_bins_train.shape}")
         if args.validation_year is not None:
-            print(f"low_input_val.shape: {low_input_val.shape}")
+            print(f"x_low_std_val.shape: {x_low_std_val.shape}")
             print(f"target_val.shape: {target_val.shape}")
             if "QMSE" in args.loss_fn:
                 print(f"target_bins_val.shape: {target_bins_val.shape}")
@@ -369,7 +363,7 @@ if __name__ == '__main__':
     #------------------------ MODEL ----------------------
     #-----------------------------------------------------
 
-    n_static_high = high_input_std.shape[1]
+    n_static_high = x_high_std.shape[1]
     write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
 
     model = build_model(
@@ -388,8 +382,8 @@ if __name__ == '__main__':
     # Create two different datasets for efficiency
     graph_dataset_train_tmp = Graph_Dataset(
         low_high_graph,
-        low_input_train,
-        high_input_std,
+        x_low_std_train,
+        x_high_std,
         target_train,
         history_length,
     )
@@ -397,8 +391,8 @@ if __name__ == '__main__':
     if args.validation_year is not None or args.val_years is not None:
         graph_dataset_val_tmp = Graph_Dataset(
             low_high_graph,
-            low_input_val,
-            high_input_std,
+            x_low_std_val,
+            x_high_std,
             target_val,
             history_length,
         )
@@ -474,15 +468,6 @@ if __name__ == '__main__':
         write_log("\nContinuing the training.")
         accelerator.load_state(args.checkpoint_ctd)
         epoch_start = torch.load(args.checkpoint_ctd+"epoch")["epoch"] + 1
-        
-    if not args.fine_tuning:
-        net_names = ["rnn", "dense", "downscaler", "processor"]
-        for net_name in net_names:
-            [param.requires_grad_(False) for name, param in model.named_parameters() if net_name in name]
-        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
-        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
-        model, optimizer, dataloader_train, lr_scheduler, loss_fn = accelerator.prepare(
-            model, optimizer, dataloader_train, lr_scheduler, loss_fn)
     
     check_freezed_layers(model, args.output_path, args.log_file, accelerator)
 

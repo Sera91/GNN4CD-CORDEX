@@ -8,10 +8,11 @@ from torch_geometric.data import HeteroData
 import json
 
 from utils.metrics import AverageMeter
-from utils.helpers import write_log, invert_normalization
+from utils.helpers import write_log
 from utils.plotting import create_validation_plots
-from utils.postprocessing import get_final_values
+from utils.extractors import extract_prediction
 from utils.helpers import convert_dict
+from utils.predictand_transforms import inverse_transform_predictand
 
 #-----------------------------------------------------
 #---------------------- TRAIN ------------------------
@@ -22,7 +23,7 @@ class Trainer(object):
     def __init__(self):
         super(Trainer, self).__init__()
 
-    def train_reg(
+    def train(
             self,
             model,
             dataloader_train,
@@ -57,10 +58,10 @@ class Trainer(object):
 
                 # Get target and mask from graph
                 train_mask = graph['high'].train_mask
-                y = graph["high"].y
+                y_trans = graph["high"].y
 
-                y_out = model(graph)
-                loss = loss_fn(y_out) # the loss internally handles the different y_out cases
+                y_out_trans = model(graph)
+                loss = loss_fn(y_out_trans, y_trans) # the loss internally handles the different y_out cases
                 
                 optimizer.zero_grad()
                 accelerator.backward(loss)
@@ -69,7 +70,7 @@ class Trainer(object):
                 step += 1
                 
                 # Log values to wandb
-                loss_meter.update(val=loss.item(), n=y.shape[0])
+                loss_meter.update(val=loss.item(), n=y_trans.shape[0])
                 
                 accelerator.log({
                     'epoch':epoch,
@@ -99,8 +100,8 @@ class Trainer(object):
 
                 # if epoch%5==0:
                 if log_val_plots:
-                    y_plot_list = []
-                    y_pred_plot_list = []
+                    y_list = []
+                    ypred_list = []
                     idxs_list = []
 
                 with torch.no_grad():    
@@ -108,12 +109,12 @@ class Trainer(object):
                         
                         # Get target and mask from graph
                         train_mask = graph['high'].train_mask
-                        y = graph["high"].y
+                        y_trans = graph["high"].y
 
-                        y_out = model(graph) # mu, phi if tweedie loss
-                        loss = loss_fn(y_out)
+                        y_out_trans = model(graph)
+                        loss = loss_fn(y_out_trans, y_trans)
 
-                        val_loss_meter.update(val=loss.item(), n=y.shape[0])
+                        val_loss_meter.update(val=loss.item(), n=y_trans.shape[0])
                         accelerator.log({
                             'epoch':epoch,
                             'val loss iteration': val_loss_meter.val,
@@ -121,25 +122,29 @@ class Trainer(object):
                         }, step=step)
                         
                         if log_val_plots:
-                            y_plot, y_pred_plot = get_final_values(y, y_out, args)
+                            y_pred_trans = extract_prediction(y_out_trans, args.loss_fn)
+                            stats = np.load(args.output_path+"predictand_stats.npz", allow_pickle=True)
+                            y = inverse_transform_predictand(y_trans, stats)
+                            y_pred = inverse_transform_predictand(y_pred_trans, stats)
+
                             # retrieve graphs for individual time instances
                             n_nodes = graph["high"].num_nodes
-                            B = y_plot.shape[0] // n_nodes
-                            y_plot = y_plot.view(B, n_nodes)
-                            y_pred_plot = y_pred_plot.view(B, n_nodes, -1)
+                            B = y.shape[0] // n_nodes
+                            y = y.view(B, n_nodes)
+                            y_pred = y_pred.view(B, n_nodes, -1)
                             train_mask = train_mask.view(B, n_nodes)
 
-                            y_pred_plot = torch.atleast_2d(y_pred_plot) # from (N,) to (1,N)
-                            y_plot = torch.atleast_2d(y_plot)
+                            y_pred = torch.atleast_2d(y_pred) # from (N,) to (1,N)
+                            y = torch.atleast_2d(y)
                             idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
-                            y_pred_plot_list.append(y_pred_plot) # time, nodes
-                            y_plot_list.append(y_plot)
+                            y_pred_list.append(y_pred) # time, nodes
+                            y_list.append(y)
                             idxs_list.append(idxs)     
 
                     ###### PLOTS ######
                     if log_val_plots:
-                        y_pred_plot_all = accelerator.gather(torch.stack(y_pred_plot_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
-                        y_plot_all = accelerator.gather(torch.stack(y_plot_list)).swapaxes(0,1)[:,:val_size]
+                        y_pred_all = accelerator.gather(torch.stack(y_pred_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
+                        y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]
                         idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]
 
                         metadata_file_path="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_plot_params.json"
@@ -159,8 +164,8 @@ class Trainer(object):
 
                         # Create a few plots to compare
                         fig_avg, fig_bias, fig_pdf = create_validation_plots(
-                            y_pred_plot_all[indices], # to ensure they are sorted correctly
-                            y_plot_all[indices],
+                            y_pred_all[indices], # to ensure they are sorted correctly
+                            y_all[indices],
                             lon,
                             lat,
                             args.target_type,
@@ -180,11 +185,11 @@ class Trainer(object):
                         if epoch == (args.epochs-1): # last epoch
                             data = HeteroData()
                             if args.target_type == "precipitation":
-                                data.pr_gnn4cd = y_pred_plot
+                                data.pr_gnn4cd = y_pred
                             elif args.target_type == "temperature":
-                                data.tasmax_gnn4cd = y_pred_plot
+                                data.tasmax_gnn4cd = y_pred
                             
-                            data.target = y_plot
+                            data.target = y
 
                             data.times = times
                             data.times_target = times

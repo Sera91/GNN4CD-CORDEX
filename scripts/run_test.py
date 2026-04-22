@@ -26,7 +26,7 @@ experiment = cfg['EXPERIMENT']
 accelerate_config = cfg['ACCELERATE_CONFIG_PATH']
 stats_mode = cfg['STATS_MODE']
 epoch = cfg['EPOCH']
-CHECKPOINT_R = f"checkpoints/checkpoint_{epoch}"
+checkpoint = f"checkpoints/checkpoint_{epoch}"
 model_name = cfg['MODEL_NAME']
 model_type = cfg['MODEL_TYPE']
 RUN_TYPE = cfg['RUN_TYPE']
@@ -84,7 +84,7 @@ python -m accelerate.commands.launch --config_file "{accelerate_config}" test.py
     --input_path_P="{input_list[ii]}" \
     --input_path="{input_path}" \
     --output_path="{outputP_list[ii]}" \
-    --train_path="{training_path}" \
+    --train_path="{train_path}" \
     --log_path="{outputP_list[ii]}logs/" \
     --output_file="{outputF_list[ii]}" \
     --period="{period_list[ii]}" \
@@ -97,7 +97,7 @@ python -m accelerate.commands.launch --config_file "{accelerate_config}" test.py
     --target_type={target_type} \
     --model_name="{model_name}" \
     --model_type="{model_type}" \
-    --checkpoint_R="{CHECKPOINT_R}" \
+    --checkpoint="{checkpoint}" \
     --mask_sealand_file="{MASK_SEALAND_FILE}" \
     --orog_file="{OROG_FILE}" \
     --coords_ij_file="{COORDS_IJ_FILE}" \

@@ -54,7 +54,7 @@ DOMAIN=SA
 NUM_TESTS=12
 
 #### update TRAINING_PATH with the path to your best run
-TRAINING_PATH=/leonardo_work/ICT26_ESP_0/wtang/CORDEXML-BENCHMARK/train/SA_domain/ESD_pseudo_reality/0415_tasmax_SA_StepLR50_07_WD00_new/
+TRAIN_PATH=/leonardo_work/ICT26_ESP_0/wtang/CORDEXML-BENCHMARK/train/SA_domain/ESD_pseudo_reality/0415_tasmax_SA_StepLR50_07_WD00_new/
 # The input path contains the graph and the static high-res features (same for pr and tasmax)
 INPUT_PATH=/leonardo_work/ICT26_ESP_0/wtang/CORDEXML-GRAPHS/SA_domain_0403/ESD_pseudo_reality/pr/train/
 PLOT_PATH=/leonardo_work/ICT26_ESP/SHARED/CORDEX-predictions/SA_domain/ESD_pseudo_reality/Test_reports/
