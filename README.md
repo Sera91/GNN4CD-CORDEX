@@ -4,7 +4,7 @@ This folder contains the refactored code. Main modifications:
 
 1. New **REGISTRY** logic, to improve the code modularity and facilitate the addition
     of new features without modifying the core code. The registries are listed below:
-    -`MODEL_REGISTRY` in `models/registry.py`:
+    - `MODEL_REGISTRY` in `models/registry.py`
     - `LOSS_REGISTRY` in `utils/losses/registry.py`:
     - `EXTRACTOR_REGISTRY` in `utils/extractors.registry.py`:
     - `TRANSFORM_PREDICTAND_REGISTRY` and `TRANSFORM_PREDICTAND_REGISTRY` in `utils/predictand_transforms/registry.py`
