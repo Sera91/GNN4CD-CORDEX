@@ -1,5 +1,5 @@
 import numpy as np
-from .registry import TRANSFORM_PREDICTOR_REGISTRY
+from .registry import PREDICTOR_TRANSFORM_REGISTRY
 
 def transform_predictors(
     x_low,
@@ -12,12 +12,12 @@ def transform_predictors(
     **kwargs
 ):
     # --- LOW-RES ---
-    x_low_std, stats_low = TRANSFORM_PREDICTOR_REGISTRY[mode_low](
+    x_low_std, stats_low = PREDICTOR_TRANSFORM_REGISTRY[mode_low](
         x_low, x_low.shape[2], train_idxs, stats
     )
 
     # --- HIGH-RES ---
-    x_high_std, stats_high = TRANSFORM_PREDICTOR_REGISTRY[mode_high](
+    x_high_std, stats_high = PREDICTOR_TRANSFORM_REGISTRY[mode_high](
         x_high, stats
     )
 
@@ -28,6 +28,6 @@ def transform_predictors(
                 "mode_low": mode_low,
                 "mode_high": mode_high}
         
-        np.savez(stats_path, **stats)
+        np.savez(stats_save_path, **stats)
 
     return x_low_std, x_high_std

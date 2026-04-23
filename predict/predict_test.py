@@ -12,11 +12,12 @@ import xarray as xr
 
 from data.datasets import Graph_Dataset, custom_collate_fn_graph
 from data.loaders import load_dataset_CORDEXML
-from utils.testing import Tester
+from utils.predictions import Predictor
 from utils.helpers import set_seed_everything, write_log, standardize_input, invert_normalization, date_to_idxs_from_timeindex
-from models import build_model
-from utils.postprocessing import get_final_values
-from utils.predictand_transforms import predictant_inverse_transform
+from models import build_model, update_parser_with_model_args
+from utils.extractors import extract_prediction
+from utils.predictand_transforms import inverse_transform_predictand
+from utils.losses.registry import LOSS_REGISTRY
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -214,7 +215,7 @@ if __name__ == '__main__':
     
     #-- Slice time index and target
     time_index_test = low_time_index[test_idxs]
-    low_input_test = input_ds[:, test_idxs, :, :] #
+    x_low_test = input_ds[:, test_idxs, :, :] #
 
     write_log(f"\nTest start idx: {test_idxs_valid_subset[0]} - {time_index_test[test_idxs_valid_subset[0]]}", args, accelerator, 'a')
     write_log(f"\nTest end idx: {test_idxs_valid_subset[0]} - {time_index_test[test_idxs_valid_subset[-1]]}", args, accelerator, 'a')
@@ -223,8 +224,8 @@ if __name__ == '__main__':
     write_log(f"\n val idx type {type(test_idxs)}", args, accelerator, 'a')
 
     write_log(f"\nStandardizing input data.", args, accelerator, 'a')
-    low_input_test_std, high_input_std = standardize_input(
-        x_low=low_input_test,
+    x_low_test_std, x_high_std = standardize_input(
+        x_low=x_low_test,
         x_high=orog,
         means_low=means_low,
         stds_low=stds_low,
@@ -236,36 +237,41 @@ if __name__ == '__main__':
     
     #-- Add the other high-res features
     if use_mask_sealand:
-        high_input_std = np.concatenate((high_input_std, mask_sealand), axis=-1)
+        x_high_std = np.concatenate((x_high_std, mask_sealand), axis=-1)
         write_log(f"\nAdding mask sea-land node features", args, accelerator, 'a')
 
     if use_coords_ij:
-        high_input_std = np.concatenate((high_input_std, coords_ij), axis=-1)
+        x_high_std = np.concatenate((x_high_std, coords_ij), axis=-1)
         write_log(f"\nAdding ij node features", args, accelerator, 'a')
 
     #-- Step 3 - torch tensors from numpy arrays
     test_idxs = torch.from_numpy(test_idxs).int()
-    low_input_test_std = torch.from_numpy(low_input_test_std).float()
-    high_input_std = torch.from_numpy(high_input_std).float()
+    x_low_test_std = torch.from_numpy(x_low_test_std).float()
+    x_high_std = torch.from_numpy(x_high_std).float()
 
-    low_input_test_std = torch.flatten(low_input_test_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
+    x_low_test_std = torch.flatten(x_low_test_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
+
+    n_static_high = x_high_std.shape[1]
+
+    write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
 
     #-----------------------------------------------------
     #------------------------ MODEL ----------------------
     #-----------------------------------------------------
 
-    n_static_high = high_input_std.shape[1]
-    write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
+    loss_class = LOSS_REGISTRY[args.loss_name]
+    output_dim = loss_class.output_dim
+
+    parser = update_parser_with_model_args(args.model_name)
+    args = parser.parse_args()
 
     model = build_model(
-        model_name=args.model_name,
-        loss_type=args.loss_type,
-        h_in=n_vars * n_levels,
-        h_hid=n_vars * n_levels,
-        high_in=n_static_high,
-        seq_length=seq_length,
+        x_low_var_dim=n_vars,
+        x_low_lev_dim=n_levels,
+        x_high_dim=n_static_high,
+        output_dim=output_dim,
+        args=args
     )
-
 
     #-----------------------------------------------------
     #------------------ LOAD CHECKPOINT ------------------
@@ -288,8 +294,8 @@ if __name__ == '__main__':
     
     write_log(f"\nDefining dataset and dataloader.", args, accelerator, 'a')
     graph_dataset_tmp = Graph_Dataset(
-        low_input=low_input_test_std,
-        high_input=high_input_std,
+        low_input=x_low_test_std,
+        high_input=x_high_std,
         graph=low_high_graph,
         target=None,
         history_length=history_length,
@@ -320,20 +326,18 @@ if __name__ == '__main__':
               f"{time_index_test[test_idxs_valid_subset.min()]} to idx {time_index_test[test_idxs_valid_subset.max()]}.", args, accelerator, 'a')
 
     start = time.time()
-    y_out, idxs = Tester.test(model, dataloader, args=args, accelerator=accelerator)
+    y_out_trans, idxs = Predictor.predict(model, dataloader, args=args, accelerator=accelerator)
     end = time.time()
 
     write_log(f"\nTest Done! \nNow post-processing results.", args, accelerator, 'a')
 
     # POST PROCESS PREDICTIONS
 
-    y_pred = get_final_values(target=None, y_out=y_out, args=args)[1] # y_out to e.g. mu, sigma
+    y_pred_trans = extract_prediction(y_out_trans, loss_fn=args.loss_fn)
 
-    y_pred = predictant_inverse_transform( # from raw model prediction to actual pr/tasmax values
-        y_pred,
-        stats_path=args.stats_path
-    )
-
+    # from raw model prediction to actual pr/tasmax values
+    predictand_stats = np.load(args.train_path+"predictand_stats.npz", allow_pickle=True)
+    y_pred = inverse_transform_predictand(y_pred_trans, predictand_stats)
     if accelerator is not None:
         accelerator.wait_for_everyone()
 

@@ -15,6 +15,6 @@ def transform_predictand(values, mode, train_idxs, stats_save_path):
     stats = {**stats_values, "mode": mode}
 
     if stats_save_path is not None:
-        np.savez(stats_path, **stats)
+        np.savez(stats_save_path, **stats)
 
     return values_std

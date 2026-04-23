@@ -13,6 +13,23 @@ import cftime
 
 
 def write_log(s, args=None, accelerator=None, mode='a'):
+    """Writes a string to args.log_file. If args is None, defaults to print.
+
+    Parameters
+    ----------
+    s : str
+        The string to write
+    args : parser.parse_args() object
+        (Default value = None)
+    accelerator : Accelerator object
+        (Default value = None)
+    mode : str
+        The writing mode, 'w'=write, 'a'=append (Default value = 'a')
+
+    Returns
+    -------
+
+    """
     if accelerator is None or accelerator.is_main_process:
         if args is not None:
             with open(args.output_path + args.log_file, mode) as f:
@@ -22,14 +39,22 @@ def write_log(s, args=None, accelerator=None, mode='a'):
 
 
 def use_gpu_if_possible():
+    """Checks wheather cuda is available
+    """
     return "cuda:0" if torch.cuda.is_available() else "cpu"
 
 def set_seed_everything(seed):
-    r"""sets the seed for generating random numbers
-    Args:
-        seed (int): the desired seed
-    Returns:
+    """Sets the seed for generating random numbers
+
+    Parameters
+    ----------
+    seed : int
+        The integer seed
+
+    Returns
+    -------
         None
+
     """
     random.seed(seed)
     np.random.seed(seed)
@@ -37,13 +62,70 @@ def set_seed_everything(seed):
     torch.cuda.manual_seed_all(seed)
 
 
+# Convert Python datetime to same type as time_index
+def convert_to_time_index_type(ts, ref):
+    """
+
+    Parameters
+    ----------
+    ts :
+        
+    ref :
+        
+
+    Returns
+    -------
+
+    """
+    # Case 1: time_index uses numpy.datetime64
+    if isinstance(ref, np.datetime64):
+        return np.datetime64(ts)
+
+    # Case 2: time_index uses Python datetime
+    if isinstance(ref, datetime.datetime):
+        return ts
+
+    # Case 3: time_index uses CFTime
+    if isinstance(ref, cftime.datetime):
+        return cftime.datetime(
+            ts.year, ts.month, ts.day,
+            ts.hour, ts.minute, ts.second,
+            calendar=ref.calendar
+        )
+
+    raise TypeError(f"Unsupported time index type: {type(ref)}")
+
+
 def date_to_idxs_from_timeindex(
     year_start, month_start, day_start, time_index,
     year_end=None, month_end=None, day_end=None    
 ):
-    """
-    Compute start/end indices using the actual time_index array.
+    """Compute start/end indices using the actual time_index array.
     Works with numpy.datetime64, Python datetime, and cftime calendars.
+
+    Parameters
+    ----------
+    year_start : int
+        
+    month_start : int
+        
+    day_start : int
+        
+    time_index : int
+        
+    year_end : int
+         (Default value = None)
+    month_end : int
+         (Default value = None)
+    day_end : int
+         (Default value = None)
+
+    Returns
+    -------
+    start_idx : int
+
+    end_idx : int (optional)
+
     """
 
     # Detect reference type from the first element
@@ -56,29 +138,9 @@ def date_to_idxs_from_timeindex(
     if year_end is not None:
         end_dt = datetime.datetime(year_end, month_end, day_end, 23, 59, 59)
 
-    # Convert Python datetime to same type as time_index
-    def convert(ts, ref):
-        # Case 1: time_index uses numpy.datetime64
-        if isinstance(ref, np.datetime64):
-            return np.datetime64(ts)
-
-        # Case 2: time_index uses Python datetime
-        if isinstance(ref, datetime.datetime):
-            return ts
-
-        # Case 3: time_index uses CFTime
-        if isinstance(ref, cftime.datetime):
-            return cftime.datetime(
-                ts.year, ts.month, ts.day,
-                ts.hour, ts.minute, ts.second,
-                calendar=ref.calendar
-            )
-
-        raise TypeError(f"Unsupported time index type: {type(ref)}")
-
-    start_ts = convert(start_dt, ref)
+    start_ts = convert_to_time_index_type(start_dt, ref)
     if year_end is not None:
-        end_ts = convert(end_dt, ref)
+        end_ts = convert_to_time_index_type(end_dt, ref)
 
     # Searchsorted
     start_idx = int(np.searchsorted(time_index, start_ts, side="left"))
@@ -90,13 +152,21 @@ def date_to_idxs_from_timeindex(
     return start_idx
 
 
-def find_not_all_nan_times(target_train, skip=24):
-    """
-    Define a mask to ignore time indexes with all NaN values.
-    Args:
-        target_train (np.ndarray) with shape (nodes, time, ...)
-    Returns:
+def find_not_all_nan_times(target_train, history_length=24):
+    """Define a mask to ignore time indexes with all NaN values.
+
+    Parameters
+    ----------
+    target_train : np.ndarray
+        
+    history_length :
+         (Default value = 24)
+
+    Returns
+    -------
+    
         idxs_not_all_nan (np.ndarray) of shape (k, 1)
+
     """
 
     initial_time_dim = target_train.shape[1]
@@ -109,7 +179,7 @@ def find_not_all_nan_times(target_train, skip=24):
     mask_not_all_nan = np.array(mask_not_all_nan, dtype=bool)
 
     # Force first L time steps to be valid
-    mask_not_all_nan[:skip] = True
+    mask_not_all_nan[:history_length] = True
     idxs_not_all_nan = np.argwhere(mask_not_all_nan)
 
     return idxs_not_all_nan
@@ -123,6 +193,27 @@ def derive_train_val_idxs_years_list(
     args=None,
     accelerator=None
     ):
+    """
+
+    Parameters
+    ----------
+    train_years :
+        
+    val_years :
+        
+    history_length :
+        
+    time_index :
+        
+    args :
+         (Default value = None)
+    accelerator :
+         (Default value = None)
+
+    Returns
+    -------
+
+    """
     
     train_idxs = []
     train_idxs_valid = []
@@ -182,11 +273,41 @@ def derive_train_val_idxs(
     args=None,
     accelerator=None
     ):
-    """
-    Computes the train and validation indexes.
-    Returns:
+    """Computes the train and validation indexes.
+
+    Parameters
+    ----------
+    train_year_start :
+        
+    train_month_start :
+        
+    train_day_start :
+        
+    train_year_end :
+        
+    train_month_end :
+        
+    train_day_end :
+        
+    history_length :
+        
+    time_index :
+        
+    idxs_not_all_nan :
+         (Default value = None)
+    validation_year :
+         (Default value = None)
+    args :
+         (Default value = None)
+    accelerator :
+         (Default value = None)
+
+    Returns
+    -------
+    
         train_idxs_list (list of ints)
         val_idxs_list (list of ints)
+
     """
 
     # --- Compute training period indices ---
@@ -305,13 +426,6 @@ def derive_train_val_idxs(
                 "Validation must be before, after, or fully inside training years."
             )
 
-    # # --- Remove indices where all nodes are NaN ---
-    # if idxs_not_all_nan is not None:
-    #     # Ensure idxs_not_all_nan is a flat NumPy array
-    #     idxs_not_all_nan = np.array(idxs_not_all_nan).flatten()
-    #     train_idxs_list = [i for i in train_idxs_list if i in idxs_not_all_nan]
-    #     val_idxs_list = [i for i in val_idxs_list if i in idxs_not_all_nan]
-
     if idxs_not_all_nan is not None:
         mask_valid = np.isin(train_idxs_valid, idxs_not_all_nan)
         train_idxs_valid_not_all_nan = train_idxs_valid[mask_valid]
@@ -335,170 +449,47 @@ def derive_train_val_idxs(
     return train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset
 
 
-def derive_qmse_bins(target, train_idxs, args, accelerator, binmin=np.log1p(0.1), binmax=np.log1p(200), binwidth=np.log1p(0.5), bins=None):
+def inspect_model(model, args, accelerator):
+    """
 
-    # Precompute bins
-    if bins is None:
-        bins = np.arange(binmin, binmax, binwidth)
-        if args.model_type == "all":
-            bins = np.insert(bins, 0, 0.0)  # log1p(0)
+    Parameters
+    ----------
+    model : object (of nn.Module)
+        The model instance
+        
+    args :
+        
+    accelerator :
 
-    # Histogram only on training subset (flatten for speed)
-    train_vals = target[:, train_idxs].ravel()
-    values_unif_log, edges_unif_log = np.histogram(train_vals, bins=bins)
+    Returns
+    -------
 
-    # searchsorted returns indices in [0, len(edges)-1]
-    target_bins = np.searchsorted(edges_unif_log, target, side="left").astype(float, copy=False)
-
-    # Handle NaNs in target
-    nan_mask = np.isnan(target)
-    if nan_mask.any():
-        target_bins[nan_mask] = np.nan
-
-    # Determine number of bins
-    if nan_mask.any():
-        max_bin = int(np.nanmax(target_bins))
-    else:
-        max_bin = int(target_bins.max())
-
-    nbins = max_bin + 1
-
-    # Fix case with an out-of-range bin
-    if nbins > len(values_unif_log):
-        write_log(
-            f"\nBins min: {int(np.nanmin(target_bins))}, "
-            f"bins max: {max_bin}, nbins: {nbins}, "
-            f"len weights: {len(values_unif_log)}",
-            args, accelerator, 'a'
-        )
-
-        # Clamp last bin
-        target_bins[target_bins == nbins - 1] = nbins - 2
-        nbins -= 1
-
-        write_log("\nUpdating last bin...", args, accelerator, 'a')
-
-    write_log(
-        f"\nbins min: {int(np.nanmin(target_bins))}, "
-        f"bins max: {int(np.nanmax(target_bins))}, nbins: {nbins}",
-        args, accelerator, 'a'
-    )
-
-    write_log(f"\nBins: {bins}", args, accelerator, 'a')
-
-    target_bins[target < 0.1] = np.nan
-
-    return target_bins
-
-
-def compute_input_statistics_and_standardize(
-        x_low,
-        x_high,
-        train_idxs,
-        n_vars,
-        args,
-        accelerator=None,
-        apply_stats=True,
-        high_independent_vars=False):
-
-    write_log(f"\nComputing statistics for the low-res input data", args, accelerator, 'a')
-
-    train_slice = x_low[:, train_idxs, :, :]  # (nodes, time_train, vars, levels)
-
-    # if args.stats_mode == "var":
-    means_low = np.mean(train_slice, axis=(0,1,3))   # (n_vars,)
-    stds_low  = np.std(train_slice,  axis=(0,1,3))
-    # elif args.stats_mode == "field":
-    #     means_low = np.nanmean(train_slice, axis=(0,1))     # (n_vars, n_levels)
-    #     stds_low  = np.nanstd(train_slice,  axis=(0,1))
-    # else:
-    #     raise Exception("Arg 'stats_mode' should be either 'var' or 'field'")
-
-    write_log(f"\nComputing statistics for the high-res input data", args, accelerator, 'a')
-
-    if x_high.shape[1] > 1: # (num_nodes, num_node_features)
-        if not high_independent_vars:
-            means_high = np.array([
-                np.nanmean(x_high[:,0]),
-                np.nanmean(x_high[:,1:])
-            ])
-            stds_high = np.array([
-                np.nanstd(x_high[:,0]),
-                np.nanstd(x_high[:,1:])
-            ])
-        else:
-            means_high = np.array([np.nanmean(x_high[:,i]) for i in range(x_high.shape[1])])
-            stds_high = np.array([np.nanstd(x_high[:,i]) for i in range(x_high.shape[1])])
-    else:
-        means_high = np.nanmean(x_high)
-        stds_high  = np.nanstd(x_high)
-
-    # save stats
-    np.save(args.output_path + "means_low.npy", means_low)
-    np.save(args.output_path + "stds_low.npy", stds_low)
-    np.save(args.output_path + "means_high.npy", means_high)
-    np.save(args.output_path + "stds_high.npy", stds_high)
-
-    if not apply_stats:
-        return means_low, stds_low, means_high, stds_high
-
-    x_low_std, x_high_std = standardize_input(
-        x_low, x_high,
-        means_low, stds_low,
-        means_high, stds_high,
-        n_vars=n_vars,
-        high_independent_vars=high_independent_vars
-    )
-
-    return x_low_std, x_high_std
-
-
-def standardize_input(
-    x_low,
-    x_high,
-    means_low,
-    stds_low,
-    means_high,
-    stds_high,
-    n_vars,
-    high_independent_vars=False
-):
-    # ---- LOW-RES STANDARDIZATION ----
-    means_b = means_low.reshape(1, 1, n_vars, 1) # from (n_vars,)
-    stds_b  = stds_low.reshape(1, 1, n_vars, 1) # from (n_vars,)
-
-    x_low = (x_low - means_b) / stds_b
-
-    # ---- HIGH-RES STANDARDIZATION ----
-    if x_high.shape[1] > 1:
-        if not high_independent_vars:
-            # First channel
-            x_high[:, 0]  = (x_high[:, 0]  - means_high[0]) / stds_high[0]
-            # Remaining channels
-            x_high[:, 1:] = (x_high[:, 1:] - means_high[1]) / stds_high[1]
-        else:
-            for i in range(x_high.shape[1]):
-                x_high[:, i]  = (x_high[:, i]  - means_high[i]) / stds_high[i]
-    else:
-        x_high = (x_high - means_high) / stds_high
-
-    return x_low, x_high
-
-
-def check_freezed_layers(model, log_path, log_file, accelerator):
+    """
     for name, param in model.named_parameters():
         n_param = param.numel() 
         if accelerator is None or accelerator.is_main_process:
-            with open(log_path+log_file, 'a') as f:
-                f.write(f"\nLayer {name} requires_grad = {param.requires_grad} and has {n_param} parameters") 
+            if args is not None:
+                with open(args.output_path + args.log_file, 'a') as f:
+                    f.write(f"\nLayer {name} requires_grad = {param.requires_grad} and has {n_param} parameters") 
 
 
 def try_eval(value):
-    """Safely evaluate Python literals or expressions."""
+    """Safely evaluate Python literals or expressions.
+
+    Parameters
+    ----------
+    value : str
+        The string to be evaluated
+
+    Returns
+    -------
+    The converted value
+
+    """
     if not isinstance(value, str):
         return value
 
-    # Normalize common literal strings
+    # Normalise common literal strings
     if value in {"None", "none"}:
         return None
     if value in {"True", "true"}:
@@ -523,7 +514,19 @@ def try_eval(value):
 
 
 def convert_dict(d):
-    """Recursively convert all values in a nested dict."""
+    """Recursively convert all values in a nested dict.
+
+    Parameters
+    ----------
+    d : dict
+        The dictionary, whose elements will be converted
+        using the try_eval function
+
+    Returns
+    -------
+    The dictionary with converted values
+
+    """
     out = {}
     for k, v in d.items():
         if isinstance(v, dict):

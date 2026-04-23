@@ -6,7 +6,7 @@ def transform_zscore_high_independent(x_high, stats=None):
     """
     Independent z-score per feature.
     """
-    if stats is None
+    if stats is None:
         means = np.array([np.nanmean(x_high[:,i]) for i in range(x_high.shape[1])])
         stds  = np.array([np.nanstd(x_high[:,i])  for i in range(x_high.shape[1])])
         stats = {"means_high": means, "stds_high": stds}

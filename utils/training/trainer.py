@@ -101,7 +101,7 @@ class Trainer(object):
                 # if epoch%5==0:
                 if args.make_val_plots and epoch % args.val_plot_frequency==0:
                     y_list = []
-                    ypred_list = []
+                    y_pred_list = []
                     idxs_list = []
 
                 with torch.no_grad():    

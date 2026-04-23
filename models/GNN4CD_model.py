@@ -73,18 +73,21 @@ class GNN4CD_model(nn.Module):
     
     def __init__(
         self,
-        x_low_encoding_dim=128,
-        history_length=24,
-        rnn_input_dim=3*5,
-        rnn_hidden_dim=3*5,
-        rnn_n_layers=2,
+        x_low_var_dim=5,
+        x_low_lev_dim=3,
         x_high_dim=6+1,
-        x_low2high_dim=64,
-        output_dim=1):
+        output_dim=1,
+        history_length=2,
+        rnn_n_layers=2,
+        x_low_encoding_dim=128,
+        x_low2high_dim=64
+        ):
 
         super(GNN4CD_model, self).__init__()
 
-        self.seq_length = history_length + 1
+        seq_length = history_length + 1
+        rnn_input_dim = x_low_var_dim * x_low_lev_dim
+        rnn_hidden_dim = x_low_var_dim * x_low_lev_dim
 
         # input shape (N,L,Hin)
         self.rnn = nn.Sequential(
@@ -92,7 +95,7 @@ class GNN4CD_model(nn.Module):
         )
 
         self.dense = nn.Sequential(
-            nn.Linear(rnn_hidden_dim*seq_length, dense_encoding_dim),
+            nn.Linear(rnn_hidden_dim*seq_length, x_low_encoding_dim),
             nn.ReLU()
         )
 

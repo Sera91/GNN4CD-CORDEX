@@ -9,19 +9,16 @@ import json
 import random
 from accelerate import Accelerator
 
-from utils.losses import MSE_QMSE_PSD_Loss
-from utils.losses import GaussianNLLLoss
-from utils.losses import BernoulliGammaNLLLoss
-from utils.helpers import write_log, check_freezed_layers, set_seed_everything
+from utils.losses.qmse import derive_qmse_bins
+from utils.helpers import write_log, inspect_model, set_seed_everything
 from utils.helpers import find_not_all_nan_times, derive_train_val_idxs, derive_train_val_idxs_years_list
-from utils.helpers import compute_input_statistics_and_standardize, derive_qmse_bins
 from utils.helpers import prepare_target_for_train
 from utils.training import Trainer
 from data.datasets import Graph_Dataset, custom_collate_fn_graph
-from models import MODEL_REGISTRY, build_model
+from models import MODEL_REGISTRY, build_model, update_parser_with_model_args
 from utils.predictand_transforms import transform_predictand
 from utils.predictor_transforms import transform_predictors
-from utils.losses import LOSS_REGISTRY, build_loss
+from utils.losses import LOSS_REGISTRY, build_loss, update_parser_with_loss_args
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -75,7 +72,6 @@ parser.add_argument('--collate_name', type=str)
 
 parser.add_argument('--stats_mode', type=str, default="var")
 parser.add_argument('--target_type', type=str)
-parser.add_argument('--run_type', type=str)
 
 #-- start and end training dates
 parser.add_argument('--train_year_start', type=str, default="")
@@ -189,12 +185,6 @@ if __name__ == '__main__':
     n_vars = x_low.shape[2]
     n_levels = x_low.shape[3]
 
-#-----------------------------------------------------
-#----------------------- LOSS ------------------------
-#-----------------------------------------------------
-
-    loss_fn = build_loss(args)
-
 #--------------------------------------------------------
 #--------------------  PREPROCESSING --------------------
 #--------------------------------------------------------
@@ -254,7 +244,7 @@ if __name__ == '__main__':
         np.save(args.output_path + "val_idxs_valid_subset.npy", val_idxs_valid_subset)
 
     #-- Step 1 - Prepare target
-    if args.loss_fn == "BernoulliGammaNLLLoss":
+    if args.loss_name == "BernoulliGammaNLLLoss":
         target_trans = target
     else:
         target_trans = transform_predictand(
@@ -264,7 +254,7 @@ if __name__ == '__main__':
         )
 
     #-- Step 4 - Compute QMSE bins
-    if "QMSE" in args.loss_fn:
+    if "QMSE" in args.loss_name:
         if args.binscale == "log":
             binmin = np.log1p(args.binmin)
             binmax = np.log1p(args.binmax)
@@ -311,7 +301,7 @@ if __name__ == '__main__':
     train_idxs = torch.from_numpy(train_idxs).int()
     if args.validation_year is not None:
         val_idxs = torch.from_numpy(val_idxs).int()
-    if "QMSE" in args.loss_fn:
+    if "QMSE" in args.loss_name:
         target_bins = torch.from_numpy(target_bins).int()
     x_low_std = torch.from_numpy(x_low_std).float()
     x_high_std = torch.from_numpy(x_high_std).float()
@@ -319,35 +309,48 @@ if __name__ == '__main__':
     x_low_std = torch.flatten(x_low_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
     x_low_std_train = x_low_std[:, train_idxs, :]
     target_train = target_trans[:, train_idxs]
-    if "QMSE" in args.loss_fn:
+    if "QMSE" in args.loss_name:
         target_bins_train = target_bins[:, train_idxs]
 
     if args.validation_year is not None:
         x_low_std_val = x_low_std[:, val_idxs, :]
         target_val = target_trans[:, val_idxs]
-        if "QMSE" in args.loss_fn:
+        if "QMSE" in args.loss_name:
             target_bins_val = target_bins[:, val_idxs]
 
     if accelerator.is_main_process:
         print(f"x_low_std_train.shape: {x_low_std_train.shape}")
         print(f"target_train.shape: {target_train.shape}")
-        if "QMSE" in args.loss_fn:
+        if "QMSE" in args.loss_name:
             print(f"target_bins_train.shape: {target_bins_train.shape}")
         if args.validation_year is not None:
             print(f"x_low_std_val.shape: {x_low_std_val.shape}")
             print(f"target_val.shape: {target_val.shape}")
-            if "QMSE" in args.loss_fn:
+            if "QMSE" in args.loss_name:
                 print(f"target_bins_val.shape: {target_bins_val.shape}")
-
-    #-----------------------------------------------------
-    #------------------------ MODEL ----------------------
-    #-----------------------------------------------------
 
     n_static_high = x_high_std.shape[1]
     write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
 
-    model = build_model(args)
-   
+    #-----------------------------------------------------
+    #-------------- BUILD LOSS and MODEL -----------------
+    #-----------------------------------------------------
+
+    # Update args with loss- and model-specific arguments
+    parser = update_parser_with_loss_args(args.loss_name)
+    parser = update_parser_with_model_args(args.model_name)
+    args = parser.parse_args()
+
+    loss, output_dim = build_loss(args)
+    
+    model = build_model(
+        x_low_var_dim=n_vars,
+        x_low_lev_dim=n_levels,
+        x_high_dim=n_static_high,
+        output_dim=output_dim,
+        args=args
+    )
+
     #-----------------------------------------------------
     #-------------- DATASET AND DATALOADER ---------------
     #-----------------------------------------------------
@@ -370,7 +373,7 @@ if __name__ == '__main__':
             args.history_length,
         )
 
-    if "QMSE" in args.loss_fn:
+    if "QMSE" in args.loss_name:
         graph_dataset_train_tmp.set_additional_features(w=target_bins_train)
         if args.validation_year is not None:
             graph_dataset_val_tmp.set_additional_features(w=target_bins_val)
@@ -428,13 +431,13 @@ if __name__ == '__main__':
     epoch_start=0
     
     if accelerator is not None:
-        model, optimizer, dataloader_train, lr_scheduler, loss_fn = accelerator.prepare(
-            model, optimizer, dataloader_train, lr_scheduler, loss_fn)
+        model, optimizer, dataloader_train, lr_scheduler, loss = accelerator.prepare(
+            model, optimizer, dataloader_train, lr_scheduler, loss)
         if args.validation_year is not None:
             dataloader_val = accelerator.prepare(dataloader_val)
-        write_log("\nUsing accelerator to prepare model, optimizer, dataloader and loss_fn...", args, accelerator, 'a')
+        write_log("\nUsing accelerator to prepare model, optimizer, dataloader and loss...", args, accelerator, 'a')
     else:
-        write_log("\nNot using accelerator to prepare model, optimizer, dataloader and loss_fn...", args, accelerator, 'a')
+        write_log("\nNot using accelerator to prepare model, optimizer, dataloader and loss...", args, accelerator, 'a')
         model = model.cuda()
 
     if args.ctd_training:
@@ -442,7 +445,7 @@ if __name__ == '__main__':
         accelerator.load_state(args.checkpoint_ctd)
         epoch_start = torch.load(args.checkpoint_ctd+"epoch")["epoch"] + 1
     
-    check_freezed_layers(model, args.output_path, args.log_file, accelerator)
+    inspect_model(model, args, accelerator)
 
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     write_log(f"\nTotal number of trainable parameters: {total_params}.", args, accelerator, 'a')
@@ -454,7 +457,7 @@ if __name__ == '__main__':
     
     write_log(f"\nUsing lr={optimizer.param_groups[0]['lr']:.8f}, " +
                 f"weight decay = {args.weight_decay} and epochs={args.epochs}." + 
-                f"\nloss: {loss_fn}", args, accelerator, 'a') 
+                f"\nloss: {loss}", args, accelerator, 'a') 
     
     effective_batch_size = args.batch_size if accelerator is None else args.batch_size*torch.cuda.device_count()
     write_log(f"\nModel = {args.model_name}, batch size = {effective_batch_size}", args, accelerator, 'a')
@@ -468,7 +471,7 @@ if __name__ == '__main__':
         dataloader_train,
         dataloader_val,
         optimizer,
-        loss_fn,
+        loss,
         lr_scheduler,
         val_size,
         time_index[val_idxs][val_idxs_valid_subset],

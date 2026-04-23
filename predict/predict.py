@@ -17,9 +17,10 @@ from utils.helpers import date_to_idxs_from_timeindex, set_seed_everything
 from utils.helpers import write_log, standardize_input, invert_normalization
 from utils.predictions import Predictor
 
-from models import build_model
+from models import build_model, update_parser_with_model_args
 from utils.extractors import extract_prediction
-from utils.predictand_transforms import predictant_inverse_transform
+from utils.predictand_transforms import inverse_transform_predictand
+from utils.predictor_transforms import transform_predictors
 from utils.losses.registry import LOSS_REGISTRY
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -286,7 +287,7 @@ if __name__ == '__main__':
     loss_class = LOSS_REGISTRY[args.loss_name]
     output_dim = loss_class.output_dim
 
-    parser = update_parser_with_model_args(model_name)
+    parser = update_parser_with_model_args(args.model_name)
     args = parser.parse_args()
 
     model = build_model(
@@ -343,7 +344,7 @@ if __name__ == '__main__':
 
     # from raw model prediction to actual pr/tasmax values
     predictand_stats = np.load(args.train_path+"predictand_stats.npz", allow_pickle=True)
-    y_pred = inverse_transform_predictand(y_pred, predictand_stats)
+    y_pred = inverse_transform_predictand(y_pred_trans, predictand_stats)
 
     if accelerator is not None:
         accelerator.wait_for_everyone()

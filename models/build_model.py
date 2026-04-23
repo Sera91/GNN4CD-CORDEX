@@ -1,8 +1,12 @@
 import inspect
 from .registry import MODEL_REGISTRY
 
-def build_model(args):
-    output_dim = OUTPUT_DIM[args.loss_fn]
+def build_model(
+    x_low_var_dim,
+    x_low_lev_dim,
+    x_high_dim,
+    output_dim,
+    args):
 
     ModelClass = MODEL_REGISTRY[args.model_name]
 
@@ -14,4 +18,12 @@ def build_model(args):
         if k in allowed
     }
 
-    return ModelClass(output_dim=output_dim, **filtered)
+    model = ModelClass(
+        x_low_var_dim=x_low_var_dim,
+        x_low_lev_dim=x_low_lev_dim,
+        x_high_dim=x_high_dim,
+        output_dim=output_dim,
+        **filtered
+        )
+
+    return model
