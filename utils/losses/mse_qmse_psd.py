@@ -8,6 +8,16 @@ from .registry import register_loss
 class MSE_QMSE_PSD_Loss(nn.Module):
     output_dim = 1 # class attribute
 
+    @staticmethod
+    def add_loss_specific_args(parser):
+        parser.add_argument("--alpha", type=float, default=0.005)
+        parser.add_argument("--beta", type=float, default=0.005)
+        parser.add_argument('--binmin', type=float, default=0.0)
+        parser.add_argument('--binmax', type=float, default=1000)
+        parser.add_argument('--binwidth', type=float, default=0.5)
+        parser.add_argument('--binscale', type=str, default="log")
+        return parser
+
     def __init__(
         self,
         alpha,

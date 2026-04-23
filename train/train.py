@@ -58,19 +58,18 @@ parser.add_argument('--no-make_val_plots', dest='make_val_plots', action='store_
 parser.add_argument('--val_plot_frequency', type=int)
 
 parser.add_argument('--loss_fn', type=str)
-parser.add_argument('--alpha', type=float, default=0.005)
-parser.add_argument('--beta', type=float, default=0.005)
 parser.add_argument('--seed', type=int, default=100)
 parser.add_argument('--n_gpu', type=int, default=4)
 
 parser.add_argument('--model_name', type=str)
 parser.add_argument('--history_length', type=str)
-parser.add_argument('--output_dims', type=str)
+
+parser.add_argument('--predictand_transform_mode', type=str)
+parser.add_argument('--predictor_low_tranform_mode', type=str)
+parser.add_argument('--predictor_high_tranform_mode', type=str)
 
 parser.add_argument('--dataset_name', type=str, default='graph_dataset')
 parser.add_argument('--collate_name', type=str)
-
-parser.add_argument('--stats_mode', type=str, default="var")
 parser.add_argument('--target_type', type=str)
 
 #-- start and end training dates
@@ -88,12 +87,6 @@ parser.add_argument('--n_val_years', type=str, default="")
 # for lists of training and validation years
 parser.add_argument('--train_years', type=str, default="")
 parser.add_argument('--val_years', type=str, default="")
-
-parser.add_argument('--threshold', type=float, default=0.0)
-parser.add_argument('--binmin', type=float, default=0.0)
-parser.add_argument('--binmax', type=float, default=1000)
-parser.add_argument('--binwidth', type=float, default=0.5)
-parser.add_argument('--binscale', type=str, default="log")
 
 parser.add_argument('--WANDB_API_KEY', type=str)
 parser.add_argument('--WANDB_USERNAME', type=str)
@@ -172,21 +165,7 @@ if __name__ == '__main__':
         metadata = json.load(f)
 
 #--------------------------------------------------------
-#----------------- DERIVED QUANTITIES -------------------
-#--------------------------------------------------------
-
-    # High resolution lon and lat
-    lon_high = low_high_graph["high"].lon
-    lat_high = low_high_graph["high"].lat
-
-    # Time resolution
-    time_res = metadata.get("time_res", None)
-    
-    n_vars = x_low.shape[2]
-    n_levels = x_low.shape[3]
-
-#--------------------------------------------------------
-#--------------------  PREPROCESSING --------------------
+#-------------------  TRAIN/VAL IDXS --------------------
 #--------------------------------------------------------
 
     #-- Step 1 - Find valid time indices
@@ -239,43 +218,14 @@ if __name__ == '__main__':
 
     np.save(args.output_path + "train_idxs.npy", train_idxs)
     np.save(args.output_path + "train_idxs_valid_subset.npy", train_idxs_valid_subset)
-    if args.validation_year is not None:
-        np.save(args.output_path + "val_idxs.npy", val_idxs)
-        np.save(args.output_path + "val_idxs_valid_subset.npy", val_idxs_valid_subset)
+    np.save(args.output_path + "val_idxs.npy", val_idxs)
+    np.save(args.output_path + "val_idxs_valid_subset.npy", val_idxs_valid_subset)
 
-    #-- Step 1 - Prepare target
-    if args.loss_name == "BernoulliGammaNLLLoss":
-        target_trans = target
-    else:
-        target_trans = transform_predictand(
-            target,
-            mode=args.predictand_transform_mode,      # e.g. "log1p", "z_score", "minmax"
-            stats_save_path=args.output_path + "predictand_stats.npz"
-        )
+#--------------------------------------------------------
+#---------  TRANSFORM PREDICTORS AND PREDICTAND ---------
+#--------------------------------------------------------
 
-    #-- Step 4 - Compute QMSE bins
-    if "QMSE" in args.loss_name:
-        if args.binscale == "log":
-            binmin = np.log1p(args.binmin)
-            binmax = np.log1p(args.binmax)
-            binwidth = np.log1p(args.binwidth)
-        else:
-            binmin = args.binmin
-            binmax = args.binmax
-            binwidth = args.binwidth
-
-        target_bins = derive_qmse_bins(
-            target_trans,
-            train_idxs[train_idxs_valid_subset],
-            args,
-            accelerator,
-            binmin=binmin,
-            binmax=binmax,
-            binwidth=binwidth
-        )
-        
-    #-- Step 5 - Compute input statistics + standardize
-    # At this point the high input coincides to orog, then mask and ij are added
+    # 1. Transform predictors
     x_low_std, x_high_std = transform_predictors(
         x_low,
         x_high=orog,
@@ -286,8 +236,13 @@ if __name__ == '__main__':
         stats_save_path=args.output_path + "predictors_stats.npz"
     )
 
-    
-    #-- Step 6. Add the other high-res features
+    n_vars = x_low_std.shape[2]
+    n_levels = x_low_std.shape[3]
+
+    # 1.2 Flatten x_low_std
+    x_low_std = torch.flatten(x_low_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
+
+    # 1.3 Add high_res predictors which are not transformed
     if use_mask_sealand:
         x_high_std = np.concatenate((x_high_std, mask_sealand), axis=-1)
         write_log(f"\nAdding mask sea-land node features", args, accelerator, 'a')
@@ -296,42 +251,20 @@ if __name__ == '__main__':
         x_high_std = np.concatenate((x_high_std, coords_ij), axis=-1)
         write_log(f"\nAdding ij node features", args, accelerator, 'a')
 
-    #-- Step 7 - torch tensors from numpy arrays
-    target_trans = torch.from_numpy(target_trans).float()
-    train_idxs = torch.from_numpy(train_idxs).int()
-    if args.validation_year is not None:
-        val_idxs = torch.from_numpy(val_idxs).int()
-    if "QMSE" in args.loss_name:
-        target_bins = torch.from_numpy(target_bins).int()
-    x_low_std = torch.from_numpy(x_low_std).float()
-    x_high_std = torch.from_numpy(x_high_std).float()
-    
-    x_low_std = torch.flatten(x_low_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
-    x_low_std_train = x_low_std[:, train_idxs, :]
-    target_train = target_trans[:, train_idxs]
-    if "QMSE" in args.loss_name:
-        target_bins_train = target_bins[:, train_idxs]
-
-    if args.validation_year is not None:
-        x_low_std_val = x_low_std[:, val_idxs, :]
-        target_val = target_trans[:, val_idxs]
-        if "QMSE" in args.loss_name:
-            target_bins_val = target_bins[:, val_idxs]
-
-    if accelerator.is_main_process:
-        print(f"x_low_std_train.shape: {x_low_std_train.shape}")
-        print(f"target_train.shape: {target_train.shape}")
-        if "QMSE" in args.loss_name:
-            print(f"target_bins_train.shape: {target_bins_train.shape}")
-        if args.validation_year is not None:
-            print(f"x_low_std_val.shape: {x_low_std_val.shape}")
-            print(f"target_val.shape: {target_val.shape}")
-            if "QMSE" in args.loss_name:
-                print(f"target_bins_val.shape: {target_bins_val.shape}")
-
     n_static_high = x_high_std.shape[1]
+
     write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
 
+    # 2. Transform predictand
+    if args.loss_name == "BernoulliGammaNLLLoss":
+        target_trans = target
+    else:
+        target_trans = transform_predictand(
+            target,
+            mode=args.predictand_transform_mode,      # e.g. "log1p", "z_score", "minmax"
+            stats_save_path=args.output_path + "predictand_stats.npz"
+        )
+    
     #-----------------------------------------------------
     #-------------- BUILD LOSS and MODEL -----------------
     #-----------------------------------------------------
@@ -351,6 +284,58 @@ if __name__ == '__main__':
         args=args
     )
 
+    # Eventually compute QMSE bins
+    if args.loss_name == "MSE_QMSE_PSD_Loss":
+        if args.binscale == "log":
+            binmin = np.log1p(args.binmin)
+            binmax = np.log1p(args.binmax)
+            binwidth = np.log1p(args.binwidth)
+        else:
+            binmin = args.binmin
+            binmax = args.binmax
+            binwidth = args.binwidth
+
+        target_bins = derive_qmse_bins(
+            target_trans,
+            train_idxs[train_idxs_valid_subset],
+            args,
+            accelerator,
+            binmin=binmin,
+            binmax=binmax,
+            binwidth=binwidth
+        )
+    
+    #-----------------------------------------------------
+    #---------------- SPLIT IN TRAIN/VAL -----------------
+    #-----------------------------------------------------
+
+    x_low_std_train = x_low_std[:, train_idxs, :]
+    x_low_std_val = x_low_std[:, val_idxs, :]
+
+    target_trans_train = target_trans[:, train_idxs]
+    target_trans_val = target_trans[:, val_idxs]
+
+    if args.loss_name == "MSE_QMSE_PSD_Loss":
+        target_bins_train = target_bins[:, train_idxs]
+        target_bins_val = target_bins[:, val_idxs]
+
+    #-----------------------------------------------------
+    #-------------- FROM NUMPY TO PYTORCH ----------------
+    #-----------------------------------------------------
+
+    # Predictors
+    x_low_std_train = torch.from_numpy(x_low_std_train).float()
+    x_low_std_val = torch.from_numpy(x_low_std_val).float()
+    x_high_std = torch.from_numpy(x_high_std).float()
+
+    # Predictand and eventually QMSE bins
+    target_trans_train = torch.from_numpy(target_trans_train).float()
+    target_trans_val = torch.from_numpy(target_trans_val).float()
+
+    if args.loss_name == "MSE_QMSE_PSD_Loss":
+        target_bins_train = torch.from_numpy(target_bins_train).int()
+        target_bins_val = torch.from_numpy(target_bins_val).int()
+
     #-----------------------------------------------------
     #-------------- DATASET AND DATALOADER ---------------
     #-----------------------------------------------------
@@ -360,7 +345,7 @@ if __name__ == '__main__':
         low_high_graph,
         x_low_std_train,
         x_high_std,
-        target_train,
+        target_trans_train,
         args.history_length,
     )
 
@@ -369,24 +354,19 @@ if __name__ == '__main__':
             low_high_graph,
             x_low_std_val,
             x_high_std,
-            target_val,
+            target_trans_val,
             args.history_length,
         )
 
-    if "QMSE" in args.loss_name:
+    if args.loss_name == "MSE_QMSE_PSD_Loss":
         graph_dataset_train_tmp.set_additional_features(w=target_bins_train)
-        if args.validation_year is not None:
-            graph_dataset_val_tmp.set_additional_features(w=target_bins_val)
+        graph_dataset_val_tmp.set_additional_features(w=target_bins_val)
 
     graph_dataset_train = torch.utils.data.Subset(graph_dataset_train_tmp, train_idxs_valid_subset) # it's just a view of the original dataset
-    if args.validation_year is not None:
-        graph_dataset_val = torch.utils.data.Subset(graph_dataset_val_tmp, val_idxs_valid_subset)
+    graph_dataset_val = torch.utils.data.Subset(graph_dataset_val_tmp, val_idxs_valid_subset)
         
     # len(graph_dataset_train) will be the number of training exaples (inputs are bigger, considering the history length)
-    if args.validation_year is not None:
-        write_log(f'\nTrainset size = {len(graph_dataset_train)}, validationset size = {len(graph_dataset_val)}.', args, accelerator, 'a')
-    else:
-        write_log(f'\nTrainset size = {len(graph_dataset_train)}.', args, accelerator, 'a')
+    write_log(f'\nTrainset size = {len(graph_dataset_train)}, validationset size = {len(graph_dataset_val)}.', args, accelerator, 'a')
 
     # Define the dataloaders
     dataloader_train = torch.utils.data.DataLoader(
@@ -397,20 +377,21 @@ if __name__ == '__main__':
         num_workers=0
     )
 
-    if args.validation_year is not None:
-        dataloader_val = torch.utils.data.DataLoader(
-            graph_dataset_val,
-            batch_size=1,
-            shuffle=False,
-            collate_fn=custom_collate_fn_graph,
-            num_workers=0
-        )
-    else:
-        dataloader_val = None
+    dataloader_val = torch.utils.data.DataLoader(
+        graph_dataset_val,
+        batch_size=1,
+        shuffle=False,
+        collate_fn=custom_collate_fn_graph,
+        num_workers=0
+    )
 
     if accelerator is None or accelerator.is_main_process:
         total_memory, used_memory, free_memory = map(int, os.popen('free -t -m').readlines()[-1].split()[1:])
         write_log(f"\nRAM memory {round((used_memory/total_memory) * 100, 2)} %", args, accelerator, 'a')
+
+    #-----------------------------------------------------
+    #------------ OPTIMIZER AND LR SCHEDULER -------------
+    #-----------------------------------------------------
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     # optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -433,8 +414,7 @@ if __name__ == '__main__':
     if accelerator is not None:
         model, optimizer, dataloader_train, lr_scheduler, loss = accelerator.prepare(
             model, optimizer, dataloader_train, lr_scheduler, loss)
-        if args.validation_year is not None:
-            dataloader_val = accelerator.prepare(dataloader_val)
+        dataloader_val = accelerator.prepare(dataloader_val)
         write_log("\nUsing accelerator to prepare model, optimizer, dataloader and loss...", args, accelerator, 'a')
     else:
         write_log("\nNot using accelerator to prepare model, optimizer, dataloader and loss...", args, accelerator, 'a')
@@ -454,7 +434,6 @@ if __name__ == '__main__':
 #----------------------- TRAIN -----------------------
 #-----------------------------------------------------
 
-    
     write_log(f"\nUsing lr={optimizer.param_groups[0]['lr']:.8f}, " +
                 f"weight decay = {args.weight_decay} and epochs={args.epochs}." + 
                 f"\nloss: {loss}", args, accelerator, 'a') 

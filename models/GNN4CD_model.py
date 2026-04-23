@@ -64,23 +64,19 @@ class GNN4CD_model(nn.Module):
     @staticmethod
     def add_model_specific_args(parser):
         parser.add_argument("--x_low_encoding_dim", type=int, default=128)
-        parser.add_argument("--history_length", type=int, default=4)
-        parser.add_argument("--rnn_input_dim", type=float, default=0.1)
-        parser.add_argument("--rnn_n_layers", type=float, default=0.1)
-        parser.add_argument("--x_high_dim", type=float, default=0.1)
-        parser.add_argument("--x_low2high_dim", type=float, default=0.1)
+        parser.add_argument("--x_low2high_dim", type=float, default=64)
         return parser
     
     def __init__(
         self,
-        x_low_var_dim=5,
-        x_low_lev_dim=3,
-        x_high_dim=6+1,
-        output_dim=1,
-        history_length=2,
-        rnn_n_layers=2,
-        x_low_encoding_dim=128,
-        x_low2high_dim=64
+        x_low_var_dim,
+        x_low_lev_dim,
+        x_high_dim,
+        output_dim,
+        history_length,
+        rnn_n_layers,
+        x_low_encoding_dim,
+        x_low2high_dim
         ):
 
         super(GNN4CD_model, self).__init__()
