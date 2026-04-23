@@ -1,0 +1,2 @@
+from builder import build_model
+from GNN4CD_model import GNN4CD_model
