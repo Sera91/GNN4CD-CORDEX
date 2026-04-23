@@ -5,6 +5,8 @@ from .registry import register_loss
 
 @register_loss("GaussianNLLLoss")
 class GaussianNLLLoss(nn.Module):
+    output_dim = 2 # class attribute
+
     def __init__(self, eps=1e-6):
         super().__init__()
         self.eps = eps

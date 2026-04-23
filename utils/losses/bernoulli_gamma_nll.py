@@ -5,6 +5,8 @@ from .registry import register_loss
 
 @register_loss("BernoulliGammaNLLLoss")
 class BernoulliGammaNLLLoss(nn.Module):
+    output_dim = 3 # class attribute
+
     def __init__(self, ignore_nans=True, eps=1e-6):
         super().__init__()
         self.ignore_nans = ignore_nans
@@ -12,9 +14,9 @@ class BernoulliGammaNLLLoss(nn.Module):
 
     def forward(self, y_out, target):
         # unpack raw parameters
-        p_raw = y_out[..., 0]
-        shape_raw = y_out[..., 1]
-        scale_raw = y_out[..., 2]
+        p_raw = y_out[:, 0]
+        shape_raw = y_out[:, 1]
+        scale_raw = y_out[:, 2]
 
         # transforms
         p = torch.sigmoid(p_raw)

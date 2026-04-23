@@ -15,11 +15,12 @@ from data.datasets import Graph_Dataset, custom_collate_fn_graph
 
 from utils.helpers import date_to_idxs_from_timeindex, set_seed_everything
 from utils.helpers import write_log, standardize_input, invert_normalization
-from utils.testing import Tester
+from utils.predictions import Predictor
 
 from models import build_model
 from utils.extractors import extract_prediction
 from utils.predictand_transforms import predictant_inverse_transform
+from utils.losses.registry import LOSS_REGISTRY
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -41,7 +42,6 @@ parser.add_argument('--target_file', type=str, default=None)
 parser.add_argument('--orog_file', type=str, default=None)
 parser.add_argument('--mask_sealand_file', type=str, default=None)
 parser.add_argument('--coords_ij_file', type=str, default=None)
-parser.add_argument('--model_type', type=str, default=None)
 parser.add_argument('--model_name', type=str, default=None) 
 parser.add_argument('--dataset_name', type=str, default=None) 
 parser.add_argument('--test_idxs_file', type=str, default="")
@@ -251,6 +251,11 @@ if __name__ == '__main__':
 
     x_low_test_std = torch.flatten(x_low_test_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
 
+    n_static_high = x_high_std.shape[1]
+
+    write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
+
+
     #-----------------------------------------------------
     #-------------- DATASET AND DATALOADER ---------------
     #-----------------------------------------------------
@@ -274,21 +279,22 @@ if __name__ == '__main__':
         num_workers=0
     )
 
-
     #-----------------------------------------------------
     #------------------------ MODEL ----------------------
     #-----------------------------------------------------
 
-    n_static_high = x_high_std.shape[1]
-    write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
+    loss_class = LOSS_REGISTRY[args.loss_name]
+    output_dim = loss_class.output_dim
+
+    parser = update_parser_with_model_args(model_name)
+    args = parser.parse_args()
 
     model = build_model(
-        model_name=args.model_name,
-        loss_type=args.loss_type,
-        h_in=n_vars * n_levels,
-        h_hid=n_vars * n_levels,
-        high_in=n_static_high,
-        seq_length=seq_length,
+        x_low_var_dim=n_vars,
+        x_low_lev_dim=n_levels,
+        x_high_dim=n_static_high,
+        output_dim=output_dim,
+        args=args
     )
     
     #-----------------------------------------------------
@@ -317,14 +323,14 @@ if __name__ == '__main__':
         model, dataloader = accelerator.prepare(model, dataloader)
 
     #-----------------------------------------------------
-    #----------------------- TEST ------------------------
+    #------------------- PREDICTIONS ---------------------
     #-----------------------------------------------------
 
-    write_log(f"\nStarting the test, from " +
+    write_log(f"\nStarting the predictions, from " +
               f"{time_index_test[test_idxs_valid_subset.min()]} to idx {time_index_test[test_idxs_valid_subset.max()]}.", args, accelerator, 'a')
 
     start = time.time()
-    y_out_trans, idxs = Tester.test(model, dataloader, args=args, accelerator=accelerator)
+    y_out_trans, idxs = Predictor.predict(model, dataloader, args=args, accelerator=accelerator)
     end = time.time()
 
     write_log(f"\nTest Done! \nNow post-processing results.", args, accelerator, 'a')

@@ -6,6 +6,8 @@ from .registry import register_loss
 
 @register_loss("MSE_QMSE_PSD_Loss")
 class MSE_QMSE_PSD_Loss(nn.Module):
+    output_dim = 1 # class attribute
+
     def __init__(
         self,
         alpha,
@@ -15,7 +17,6 @@ class MSE_QMSE_PSD_Loss(nn.Module):
         **psd_kwargs
         ):
         super().__init__()
-
         self.alpha = alpha
         self.beta = beta
         self.mse_loss_fn = nn.MSELoss()
