@@ -228,8 +228,8 @@ if __name__ == '__main__':
         x_low=x_low_test,
         x_high=orog,
         train_idxs=None,
-        mode_low=args.predictor_low_tranform_mode,      # e.g. "zscore_lowres_var"
-        mode_high=args.predictor_high_transform_mode,    # e.g. "zscore_highres_grouped"
+        mode_low=None,     # inferred from predictors_stats
+        mode_high=None,    # inferred from predictors_stats
         stats=predictors_stats,
         stats_save_path=None
     )
@@ -342,7 +342,7 @@ if __name__ == '__main__':
     y_pred_trans = extract_prediction(y_out_trans, loss_fn=args.loss_fn)
 
     # from raw model prediction to actual pr/tasmax values
-    predictand_stats = np.load(args.train_path+"predictand_stats.npz", allow_pickle=True)
+    predictand_stats = np.load(args.train_path + "predictand_stats.npz", allow_pickle=True)
     y_pred = inverse_transform_predictand(y_pred_trans, predictand_stats)
 
     if accelerator is not None:

@@ -219,16 +219,28 @@ if __name__ == '__main__':
     write_log(f"\n val idx type {type(test_idxs)}", args, accelerator, 'a')
 
     write_log(f"\nStandardizing input data.", args, accelerator, 'a')
-    x_low_test_std, x_high_std = standardize_input(
+
+    predictors_stats = args.train_path + "predictors_stats.npz"
+    x_low_test_std, x_high_std = transform_predictors(
         x_low=x_low_test,
         x_high=orog,
-        means_low=means_low,
-        stds_low=stds_low,
-        means_high=means_high,
-        stds_high=stds_high,
-        n_vars=n_vars,
-        high_independent_vars=HIGH_INDEPENDENT_VARS,
+        train_idxs=None,
+        mode_low=None,     # inferred from predictors_stats
+        mode_high=None,    # inferred from predictors_stats
+        stats=predictors_stats,
+        stats_save_path=None
     )
+
+    # x_low_test_std, x_high_std = standardize_input(
+    #     x_low=x_low_test,
+    #     x_high=orog,
+    #     means_low=means_low,
+    #     stds_low=stds_low,
+    #     means_high=means_high,
+    #     stds_high=stds_high,
+    #     n_vars=n_vars,
+    #     high_independent_vars=HIGH_INDEPENDENT_VARS,
+    # )
     
     #-- Add the other high-res features
     if use_mask_sealand:
