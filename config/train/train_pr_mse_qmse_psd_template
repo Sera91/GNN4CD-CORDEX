@@ -6,8 +6,8 @@
 TIME="08:00:00"
 MEM="100G"
 JOB_NAME="mse-qmse-psd"
-MAIL="vblasone@ictp.it"
-LOG_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/pr/mse_005qmse_005psd_land_coords_ij/"
+MAIL=""
+LOG_PATH=""
 N_GPU="1"
 SEED=100
 MODEL_NAME="GNN4CD_model_mod1"
@@ -19,17 +19,17 @@ RUN_TYPE="CORDEXML"
 # WANDB PARAMETERS #
 #------------------#
 
-WANDB_PROJECT_NAME="CORDEXML_pr"
-WANDB_API_KEY="b3abf8b44e8d01ae09185d7f9adb518fc44730dd"
-WANDB_USERNAME="valebl"
+WANDB_PROJECT_NAME=""
+WANDB_API_KEY=""
+WANDB_USERNAME=""
 
 #--------------------------------------------#
 # PATHS (conda env, main, accelerate config) #
 #--------------------------------------------#
-SOURCE_PATH="/leonardo/home/userexternal/vblasone/.bashrc"
-ENV_PATH="/leonardo/home/userexternal/vblasone/.conda/envs/GNN4CDenv"
-MAIN_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML"
-ACCELERATE_CONFIG_PATH="/leonardo/home/userexternal/vblasone/.cache/huggingface/accelerate/default_config_${N_GPU}.yaml"
+SOURCE_PATH=""
+ENV_PATH=""
+MAIN_PATH=""
+ACCELERATE_CONFIG_PATH=""
 
 #-------------------------------#
 # INPUT/OUTPUT FILES PARAMETERS #
@@ -56,7 +56,7 @@ OUTPUT_DIMS=1
 #-----------------#
 # LOSS PARAMETERS #
 #-----------------#
-LOSS_FN="MSE_QMSE_PSD_Loss"
+LOSS_NAME="MSE_QMSE_PSD_Loss"
 ALPHA=0.005
 BETA=0.005
 THRESHOLD=0.0
