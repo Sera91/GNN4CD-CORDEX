@@ -117,5 +117,5 @@ class GNN4CD_model(nn.Module):
         # print(f"encod_rnn: {encod_rnn.shape}, data.x_dict['high']: {data.x_dict['high'].shape}, data['low', 'to', 'high'].edge_index: {data['low', 'to', 'high'].edge_index.shape}")
         encod_low2high  = self.downscaler((encod_rnn, data.x_dict['high']), data['low', 'to', 'high'].edge_index)
         encod_high = self.processor(encod_low2high , data.edge_index_dict[('high','within','high')])
-        x_high = self.predictor(encod_high)
-        return x_high
+        out = self.predictor(encod_high)
+        return out
