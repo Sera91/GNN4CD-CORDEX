@@ -42,7 +42,6 @@ accelerate launch --config_file ${ACCELERATE_CONFIG_PATH} train/train.py \
 --lr=${LR} \
 --weight_decay=${WEIGHT_DECAY} \
 --loss_fn=${LOSS_FN} \
---model_type=${MODEL_TYPE} \
 --model_name=${MODEL_NAME} \
 --dataset_name=${DATASET_NAME} \
 --collate_name=${COLLATE_NAME} \
@@ -75,9 +74,14 @@ accelerate launch --config_file ${ACCELERATE_CONFIG_PATH} train/train.py \
 --run_type=${RUN_TYPE} \
 ${USE_ACCELERATE} \
 ${CTD_TRAINING} \
-${FINE_TUNING} \
 ${MAKE_VAL_PLOTS} \
 --train_years "${TRAIN_YEARS[@]}" \
---val_years "${VAL_YEARS[@]}"
+--val_years "${VAL_YEARS[@]}" \
+--history_length=${HISTORY_LENGTH} \
+--output_dims=${OUTPUT_DIMS} \
+--predictand_transform_mode=${PREDICTAND_TRANSFORM_MODE} \
+--predictor_low_tranform_mode=${PREDICTOR_LOW_TRANSFORM_MODE} \
+--predictor_high_tranform_mode=${PREDICTOR_HIGH_TRANSFORM_MODE} \
+--val_plot_frequency=${VAL_PLOT_FREQUENCY}
 EOT
 

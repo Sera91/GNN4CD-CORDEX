@@ -11,10 +11,17 @@ LOG_PATH="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/runs/pr/mse_005qmse_
 N_GPU="1"
 SEED=100
 MODEL_NAME="GNN4CD_model_mod1"
-MODEL_TYPE="Rall"
 TARGET_TYPE="precipitation"
 LR_SCHEDULER="StepLR"
 RUN_TYPE="CORDEXML"
+
+#------------------#
+# WANDB PARAMETERS #
+#------------------#
+
+WANDB_PROJECT_NAME="CORDEXML_pr"
+WANDB_API_KEY="b3abf8b44e8d01ae09185d7f9adb518fc44730dd"
+WANDB_USERNAME="valebl"
 
 #--------------------------------------------#
 # PATHS (conda env, main, accelerate config) #
@@ -40,32 +47,52 @@ GRAPH_FILE="low_high_graph.pkl"
 DATASET_NAME="Dataset_Graph"
 COLLATE_NAME="custom_collate_fn_graph"
 
-#---------------------#
-# TRAINING PARAMETERS #
-#---------------------#
+#------------------#
+# MODEL PARAMETERS #
+#------------------#
+HISTORY_LENGTH=2 # days
+OUTPUT_DIMS=1
 
-EPOCHS=150
-BATCH_SIZE=64
-LR_STEP_SIZE=25
-LR=0.001
-WEIGHT_DECAY=0.0
+#-----------------#
+# LOSS PARAMETERS #
+#-----------------#
 LOSS_FN="MSE_QMSE_PSD_Loss"
 ALPHA=0.005
 BETA=0.005
-WANDB_PROJECT_NAME="CORDEXML_pr"
-
 THRESHOLD=0.0
 BINMIN=0.0
 BINMAX=350
 BINWIDTH=0.5
 BINSCALE="log"
 
-#----------------------------------------#
-#             TRAINING PERIOD            #
-#----------------------------------------#
+#------------------------------------#
+# PREDICTOR AND PREDICTAND TRANSFORM #
+#------------------------------------#
+PREDICTAND_TRANSFORM_MODE="log1p" # log1p, minmax, zscore
+PREDICTOR_LOW_TRANSFORM_MODE="zscore_low_var" # zscore per variable, across levels
+PREDICTOR_HIGH_TRANSFORM_MODE="zscore_high_independent" # zscore per field, independently
 
-TRAIN_YEARS=""
-VAL_YEARS=""
+#---------------------#
+# TRAINING PARAMETERS #
+#---------------------#
+EPOCHS=150
+BATCH_SIZE=64
+LR_STEP_SIZE=25
+LR=0.001
+WEIGHT_DECAY=0.0
+
+CTD_TRAINING=false
+USE_ACCELERATE=true
+
+#------------------#
+# VALIDATION PLOTS #
+#------------------#
+MAKE_VAL_PLOTS=true
+VAL_PLOT_FREQUENCY=1
+
+#-----------------#
+# TRAINING PERIOD #
+#-----------------#
 
 TRAIN_YEAR_START=1961
 TRAIN_MONTH_START=1
@@ -75,19 +102,14 @@ TRAIN_MONTH_END=12
 TRAIN_DAY_END=29
 VALIDATION_YEAR=1980
 
+
+#--------------do not change here below------------------
+
+TRAIN_YEARS=""
+VAL_YEARS=""
 FIRST_YEAR=""
 LAST_YEAR=""
 N_VAL_YEARS=""
-
-#-----------------#
-# BOOLEAN OPTIONS #
-#-----------------#
-CTD_TRAINING=false
-FINE_TUNING=true
-USE_ACCELERATE=true
-MAKE_VAL_PLOTS=true
-
-#--------------do not change here below------------------
 
 if [ ${USE_ACCELERATE} = true ] ; then
 	USE_ACCELERATE="--use_accelerate"

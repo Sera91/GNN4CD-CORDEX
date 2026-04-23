@@ -99,7 +99,7 @@ class Trainer(object):
                 model.eval()
 
                 # if epoch%5==0:
-                if log_val_plots:
+                if args.make_val_plots and epoch % args.val_plot_frequency==0:
                     y_list = []
                     ypred_list = []
                     idxs_list = []
@@ -121,7 +121,7 @@ class Trainer(object):
                             'val loss avg': val_loss_meter.avg
                         }, step=step)
                         
-                        if log_val_plots:
+                        if args.make_val_plots:
                             y_pred_trans = extract_prediction(y_out_trans, args.loss_fn)
                             stats = np.load(args.output_path+"predictand_stats.npz", allow_pickle=True)
                             y = inverse_transform_predictand(y_trans, stats)
@@ -142,7 +142,7 @@ class Trainer(object):
                             idxs_list.append(idxs)     
 
                     ###### PLOTS ######
-                    if log_val_plots:
+                    if args.make_val_plots:
                         y_pred_all = accelerator.gather(torch.stack(y_pred_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
                         y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]
                         idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]

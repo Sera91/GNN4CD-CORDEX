@@ -18,9 +18,10 @@ from utils.helpers import compute_input_statistics_and_standardize, derive_qmse_
 from utils.helpers import prepare_target_for_train
 from utils.training import Trainer
 from data.datasets import Graph_Dataset, custom_collate_fn_graph
-from models import build_model
+from models import MODEL_REGISTRY, build_model
 from utils.predictand_transforms import transform_predictand
 from utils.predictor_transforms import transform_predictors
+from utils.losses import LOSS_REGISTRY, build_loss
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -48,8 +49,6 @@ parser.add_argument('--batch_size', type=int, default=64, help='batch size (glob
 parser.add_argument('--step_size', type=int, default=10, help='scheduler step size (global)')
 parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
 parser.add_argument('--weight_decay', type=float, default=0.0, help='weight decay (wd)')
-parser.add_argument('--fine_tuning',  action='store_true')
-parser.add_argument('--no-fine_tuning', dest='fine_tuning', action='store_false')
 parser.add_argument('--load_checkpoint',  action='store_true')
 parser.add_argument('--no-load_checkpoint', dest='load_checkpoint', action='store_false')
 parser.add_argument('--lr_scheduler', type=str, default="StepLR")
@@ -59,6 +58,7 @@ parser.add_argument('--ctd_training',  action='store_true')
 parser.add_argument('--no-ctd_training', dest='ctd_training', action='store_false')
 parser.add_argument('--make_val_plots', action='store_true')
 parser.add_argument('--no-make_val_plots', dest='make_val_plots', action='store_false')
+parser.add_argument('--val_plot_frequency', type=int)
 
 parser.add_argument('--loss_fn', type=str)
 parser.add_argument('--alpha', type=float, default=0.005)
@@ -66,8 +66,10 @@ parser.add_argument('--beta', type=float, default=0.005)
 parser.add_argument('--seed', type=int, default=100)
 parser.add_argument('--n_gpu', type=int, default=4)
 
-parser.add_argument('--model_type', type=str)
-parser.add_argument('--model_name', type=str, default='HiResPrecipNet')
+parser.add_argument('--model_name', type=str)
+parser.add_argument('--history_length', type=str)
+parser.add_argument('--output_dims', type=str)
+
 parser.add_argument('--dataset_name', type=str, default='graph_dataset')
 parser.add_argument('--collate_name', type=str)
 
@@ -97,16 +99,8 @@ parser.add_argument('--binmax', type=float, default=1000)
 parser.add_argument('--binwidth', type=float, default=0.5)
 parser.add_argument('--binscale', type=str, default="log")
 
-
-HISTORY_LENGTH_MAP = {
-    "1h": 24,   # [t-24,...,t]
-    "3h": 8,    # [t-24,t-21,...,t]
-    "6h": 4,    # [t-24,t-18,t-12,t-6,t]
-    "1d": 2,    # [t-2,t-1,t]
-}
-
-HIGH_INDEPENDENT_VARS=True
-
+parser.add_argument('--WANDB_API_KEY', type=str)
+parser.add_argument('--WANDB_USERNAME', type=str)
 
 if __name__ == '__main__':
 
@@ -131,8 +125,8 @@ if __name__ == '__main__':
     else:
         accelerator = None
     
-    os.environ['WANDB_API_KEY'] = 'b3abf8b44e8d01ae09185d7f9adb518fc44730dd'
-    os.environ['WANDB_USERNAME'] = 'valebl'
+    os.environ['WANDB_API_KEY'] = args.WANDB_API_KEY
+    os.environ['WANDB_USERNAME'] = args.WANDB_USERNAME
     os.environ['WANDB_MODE'] = 'offline'
     os.environ['WANDB_CONFIG_DIR']='./wandb/'
     os.environ['WANDB_SERVICE_WAIT'] = '300'
@@ -191,13 +185,6 @@ if __name__ == '__main__':
 
     # Time resolution
     time_res = metadata.get("time_res", None)
-
-    # Determine history length and seq_length based on time resolution
-    history_length = HISTORY_LENGTH_MAP.get(time_res) # lookup for the predictors
-    if history_length is None:
-        raise ValueError(f"Unknown time resolution: {time_res}")
-    
-    seq_length = history_length + 1 # total length of the sequence for the RNN model
     
     n_vars = x_low.shape[2]
     n_levels = x_low.shape[3]
@@ -206,14 +193,7 @@ if __name__ == '__main__':
 #----------------------- LOSS ------------------------
 #-----------------------------------------------------
 
-    if args.loss_fn == "MSE_QMSE_PSD_Loss":
-        loss_fn = MSE_QMSE_PSD_Loss(alpha=args.alpha, beta=args.beta)
-    elif args.loss_fn == "GaussianNLLLoss":
-        loss_fn = GaussianNLLLoss()
-    elif args.loss_fn == "BernoulliGammaNLLLoss":
-        loss_fn = BernoulliGammaNLLLoss()
-    else:
-        raise Exception(f"The provided loss: {args.loss_fn} is not implemented.")
+    loss_fn = build_loss(args)
 
 #--------------------------------------------------------
 #--------------------  PREPROCESSING --------------------
@@ -235,7 +215,7 @@ if __name__ == '__main__':
         train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = derive_train_val_idxs_years_list(
             train_years,
             val_years,
-            history_length=history_length,
+            history_length=args.history_length,
             time_index=time_index,
             args=args,
             accelerator=accelerator
@@ -250,7 +230,7 @@ if __name__ == '__main__':
         train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = derive_train_val_idxs_years_list(
             train_years,
             val_years,
-            history_length=history_length,
+            history_length=args.history_length,
             time_index=time_index,
             args=args,
             accelerator=accelerator
@@ -259,7 +239,7 @@ if __name__ == '__main__':
         train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = derive_train_val_idxs(
             int(args.train_year_start), int(args.train_month_start), int(args.train_day_start),
             int(args.train_year_end), int(args.train_month_end), int(args.train_day_end),
-            history_length=history_length,
+            history_length=args.history_length,
             time_index=time_index,
             idxs_not_all_nan=idxs_not_all_nan,
             validation_year=int(args.validation_year),
@@ -366,14 +346,7 @@ if __name__ == '__main__':
     n_static_high = x_high_std.shape[1]
     write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
 
-    model = build_model(
-        model_name=args.model_name,
-        loss_type=args.loss_fn,
-        h_in=n_vars * n_levels,
-        h_hid=n_vars * n_levels,
-        high_in=n_static_high,
-        seq_length=seq_length,
-    )
+    model = build_model(args)
    
     #-----------------------------------------------------
     #-------------- DATASET AND DATALOADER ---------------
@@ -385,7 +358,7 @@ if __name__ == '__main__':
         x_low_std_train,
         x_high_std,
         target_train,
-        history_length,
+        args.history_length,
     )
 
     if args.validation_year is not None or args.val_years is not None:
@@ -394,7 +367,7 @@ if __name__ == '__main__':
             x_low_std_val,
             x_high_std,
             target_val,
-            history_length,
+            args.history_length,
         )
 
     if "QMSE" in args.loss_fn:
