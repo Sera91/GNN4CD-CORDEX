@@ -83,6 +83,28 @@ def return_test_idxs_from_years_list(years_list, time_index, history_length):
 
     return test_idxs, test_idxs_valid_subset
 
+def return_test_idxs(predictor: xr.Dataset, 
+                     period: str):
+    """Split data into training and test sets.
+    
+    Args:
+        predictor: Predictor dataset
+        period: periof experiment name. #(['1981-2000','2041-2060','2080-2099'])
+        
+    """
+    if period == 'historical':
+            years_test = list(range(1981, 2001))
+        
+    elif period == 'mid_century':
+            years_test = list(range(2041, 2061))
+    else:
+            years_test = list(range(2080, 2100))
+    
+    
+    test_idxs=np.argwhere(np.isin(predictor['time'].dt.year, years_test))
+    
+    return test_idxs
+
 
 THRESHOLD = 0.0
 
@@ -148,6 +170,7 @@ if __name__ == '__main__':
         metadata = json.load(f)
 
     predictors_filename = args.input_path_P + args.predictors_filename
+    predictor = xr.open_dataset(predictors_filename, engine="netcdf4")
     # Load the input dataset
     params = ['q', 't', 'u', 'v', 'z']
     levels = ['850', '700', '500']
@@ -200,7 +223,10 @@ if __name__ == '__main__':
     elif args.period == 'end_century':
         years_test = list(range(2080, 2100))
                          
-    test_idxs, test_idxs_valid_subset = return_test_idxs_from_years_list(years_test, low_time_index, history_length)
+    #test_idxs, test_idxs_valid_subset = return_test_idxs_from_years_list(years_test, low_time_index, history_length)
+    test_idxs = return_test_idxs(predictor, args.period).squeeze()
+
+    test_idxs_valid_subset = test_idxs[history_length:]
 
     # Statistics computed on training data
     means_low = np.load(args.train_path + "means_low.npy")
@@ -219,8 +245,8 @@ if __name__ == '__main__':
     time_index_test = low_time_index[test_idxs]
     low_input_test = input_ds[:, test_idxs, :, :] #
 
-    write_log(f"\nTest start idx: {test_idxs_valid_subset[0]} - {time_index_test[test_idxs_valid_subset[0]]}", args, accelerator, 'a')
-    write_log(f"\nTest end idx: {test_idxs_valid_subset[0]} - {time_index_test[test_idxs_valid_subset[-1]]}", args, accelerator, 'a')
+    write_log(f"\nTest start idx: {test_idxs_valid_subset[0]}", args, accelerator, 'a')
+    write_log(f"\nTest end idx: {test_idxs_valid_subset[-1]}", args, accelerator, 'a')
     write_log(f"\nTotal test days: {len(test_idxs_valid_subset)}", args, accelerator, 'a')
     write_log(f"\n the first ten idx are {test_idxs[0:10]}", args, accelerator, 'a')
     write_log(f"\n val idx type {type(test_idxs)}", args, accelerator, 'a')
@@ -362,7 +388,12 @@ if __name__ == '__main__':
             y_pred = np.where(np.isfinite(np.expm1(y_pred)), np.expm1(y_pred), np.nan)
         y_pred[y_pred<THRESHOLD] = 0.0
     elif args.target_type == "temperature":
-        y_pred = invert_normalization(y_pred, stats_path=args.train_path)
+        if args.domain=='NZ':
+            max_val_temp=320
+            min_val_temp=230
+            y_pred = y_pred * (max_val_temp - min_val_temp) + min_val_temp
+        else:
+            y_pred = invert_normalization(y_pred, stats_path=args.train_path)
 
     # LON LAT
     lat_low = low_high_graph["low"].lat.cpu().numpy()
