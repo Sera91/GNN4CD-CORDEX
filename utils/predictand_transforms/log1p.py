@@ -2,7 +2,7 @@ import numpy as np
 from .registry import register_predictand_transform, register_predictand_inverse_transform
 
 @register_predictand_transform("log1p")
-def transform_log1p(values, stats_path):
+def transform_log1p(values, train_idxs=None):
     # No stats needed
     stats = {}
     return np.log1p(values), stats
