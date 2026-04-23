@@ -18,7 +18,7 @@ from utils.helpers import write_log, standardize_input, invert_normalization
 from utils.testing import Tester
 
 from models import build_model
-from utils.postprocessing import get_final_values
+from utils.extractors import extract_prediction
 from utils.predictand_transforms import predictant_inverse_transform
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -29,9 +29,9 @@ parser.add_argument('--output_path', type=str, help='path to output directory')
 parser.add_argument('--log_file', type=str, default='log.txt', help='log file')
 
 parser.add_argument('--epoch', type=int)
-parser.add_argument('--train_path_R', type=str)
+parser.add_argument('--train_path', type=str)
 parser.add_argument('--train_path_C', type=str)
-parser.add_argument('--checkpoint_R', type=str, default=None)
+parser.add_argument('--checkpoint', type=str, default=None)
 parser.add_argument('--checkpoint_C', type=str, default=None)
 parser.add_argument('--output_file', type=str, default="G_predictions.pkl")
 
@@ -97,7 +97,7 @@ if __name__ == '__main__':
         accelerator = None
 
     write_log(f"Starting the testing for epoch {args.epoch}...", args, accelerator, 'w')
-    write_log(f"\nUsing {args.checkpoint_R}, training path: {args.train_path_R}", args, accelerator, 'w')
+    write_log(f"\nUsing {args.checkpoint}, training path: {args.train_path}", args, accelerator, 'w')
     write_log(f"\nCuda is available: {torch.cuda.is_available()}. There are {torch.cuda.device_count()} available GPUs.", args, accelerator, 'a')
 
 #--------------------------------------------------------
@@ -111,7 +111,7 @@ if __name__ == '__main__':
         low_high_graph = pickle.load(f)
 
     #-- 2. Low res input
-    low_input = np.load(args.input_path+args.low_input_file)
+    x_low = np.load(args.input_path+args.x_low_file)
 
     #-- 3. Target
     target = np.load(args.input_path+args.target_file)
@@ -158,8 +158,8 @@ if __name__ == '__main__':
     
     seq_length = history_length + 1 # total length of the sequence for the RNN model
     
-    n_vars = low_input.shape[2]
-    n_levels = low_input.shape[3]
+    n_vars = x_low.shape[2]
+    n_levels = x_low.shape[3]
 
 #-----------------------------------------------------
 #---------------------- INDICES  ---------------------
@@ -211,15 +211,9 @@ if __name__ == '__main__':
         print(f"Output (start_idx, end_idx): {test_start_idx, test_end_idx}" +
         f" corresponding to {time_index[test_start_idx], time_index[test_end_idx-1]}")
 
-    # Statistics computed on training data
-    means_low = np.load(args.train_path_R + "means_low.npy")
-    stds_low = np.load(args.train_path_R + "stds_low.npy")
-    means_high = np.load(args.train_path_R + "means_high.npy")
-    stds_high = np.load(args.train_path_R + "stds_high.npy")
-
     #-- Slice time index and target
     time_index_test = time_index[test_idxs]
-    low_input_test = low_input[:, test_idxs, :, :] # num_nodes, time, vars, levels
+    x_low_test = x_low[:, test_idxs, :, :] # num_nodes, time, vars, levels
     target_test = target[:, test_idxs][:, test_idxs_valid_subset]
 
 #--------------------------------------------------------
@@ -228,33 +222,34 @@ if __name__ == '__main__':
 
     #-- Stesp 1. Standardize input data
     write_log(f"\nStandardizing input data.", args, accelerator, 'a')
-    low_input_test_std, high_input_std = standardize_input(
-        x_low=low_input_test,
+
+    predictors_stats = args.train_path + "predictors_stats.npz"
+    x_low_test_std, x_high_std = transform_predictors(
+        x_low=x_low_test,
         x_high=orog,
-        means_low=means_low,
-        stds_low=stds_low,
-        means_high=means_high,
-        stds_high=stds_high,
-        n_vars=n_vars,
-        high_independent_vars=HIGH_INDEPENDENT_VARS,
+        train_idxs=None,
+        mode_low=args.predictor_low_tranform_mode,      # e.g. "zscore_lowres_var"
+        mode_high=args.predictor_high_transform_mode,    # e.g. "zscore_highres_grouped"
+        stats=predictors_stats,
+        stats_save_path=None
     )
     
     #-- Step 2. Add the other high-res features
     if use_mask_sealand:
-        high_input_std = np.concatenate((high_input_std, mask_sealand), axis=-1)
+        x_high_std = np.concatenate((x_high_std, mask_sealand), axis=-1)
         write_log(f"\nAdding mask sea-land node features", args, accelerator, 'a')
 
     if use_coords_ij:
-        high_input_std = np.concatenate((high_input_std, coords_ij), axis=-1)
+        x_high_std = np.concatenate((x_high_std, coords_ij), axis=-1)
         write_log(f"\nAdding ij node features", args, accelerator, 'a')
 
     #-- Step 3 - torch tensors from numpy arrays
     test_idxs = torch.from_numpy(test_idxs).int()
-    low_input_test_std = torch.from_numpy(low_input_test_std).float()
-    high_input_std = torch.from_numpy(high_input_std).float()
+    x_low_test_std = torch.from_numpy(x_low_test_std).float()
+    x_high_std = torch.from_numpy(x_high_std).float()
     target_test = torch.from_numpy(target_test).float()
 
-    low_input_test_std = torch.flatten(low_input_test_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
+    x_low_test_std = torch.flatten(x_low_test_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
 
     #-----------------------------------------------------
     #-------------- DATASET AND DATALOADER ---------------
@@ -262,8 +257,8 @@ if __name__ == '__main__':
     
     write_log(f"\nDefining dataset and dataloader.", args, accelerator, 'a')
     graph_dataset_tmp = Graph_Dataset(
-        low_input=low_input_test_std,
-        high_input=high_input_std,
+        x_low=x_low_test_std,
+        high_input=x_high_std,
         graph=low_high_graph,
         target=None,
         history_length=history_length,
@@ -284,7 +279,7 @@ if __name__ == '__main__':
     #------------------------ MODEL ----------------------
     #-----------------------------------------------------
 
-    n_static_high = high_input_std.shape[1]
+    n_static_high = x_high_std.shape[1]
     write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
 
     model = build_model(
@@ -301,14 +296,14 @@ if __name__ == '__main__':
     #-----------------------------------------------------
 
     if accelerator is None:
-        checkpoint = torch.load(args.train_path_R + args.checkpoint_R, map_location=torch.device('cpu'), weights_only=True)
+        checkpoint = torch.load(args.train_path + args.checkpoint, map_location=torch.device('cpu'), weights_only=True)
         device = 'cpu'
     else:
         try:
-            checkpoint = torch.load(args.train_path_R + args.checkpoint_R + "/pytorch_model.bin", weights_only=True)
+            checkpoint = torch.load(args.train_path + args.checkpoint + "/pytorch_model.bin", weights_only=True)
         except:
-            checkpoint = safetensors.torch.load_file(args.train_path_R + args.checkpoint_R + "/model.safetensors")
-            torch.save(checkpoint, args.train_path_R + args.checkpoint_R + "pytorch_model.bin")
+            checkpoint = safetensors.torch.load_file(args.train_path + args.checkpoint + "/model.safetensors")
+            torch.save(checkpoint, args.train_path + args.checkpoint + "pytorch_model.bin")
         device = accelerator.device
     
     write_log("\nLoading state dict.", args, accelerator, 'a')
@@ -329,7 +324,7 @@ if __name__ == '__main__':
               f"{time_index_test[test_idxs_valid_subset.min()]} to idx {time_index_test[test_idxs_valid_subset.max()]}.", args, accelerator, 'a')
 
     start = time.time()
-    y_out, idxs = Tester.test(model, dataloader, args=args, accelerator=accelerator)
+    y_out_trans, idxs = Tester.test(model, dataloader, args=args, accelerator=accelerator)
     end = time.time()
 
     write_log(f"\nTest Done! \nNow post-processing results.", args, accelerator, 'a')
@@ -338,12 +333,11 @@ if __name__ == '__main__':
     #------------------ POST-PROCESSING ------------------
     #-----------------------------------------------------
 
-    y_pred = get_final_values(target=None, y_out=y_out, args=args)[1] # y_out to e.g. mu, sigma
+    y_pred_trans = extract_prediction(y_out_trans, loss_fn=args.loss_fn)
 
-    y_pred = predictant_inverse_transform( # from raw model prediction to actual pr/tasmax values
-        y_pred,
-        stats_path=args.stats_path
-    )
+    # from raw model prediction to actual pr/tasmax values
+    predictand_stats = np.load(args.train_path+"predictand_stats.npz", allow_pickle=True)
+    y_pred = inverse_transform_predictand(y_pred, predictand_stats)
 
     if accelerator is not None:
         accelerator.wait_for_everyone()
