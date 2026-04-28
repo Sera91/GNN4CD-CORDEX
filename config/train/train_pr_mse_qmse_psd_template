@@ -53,7 +53,6 @@ COLLATE_NAME="custom_collate_fn_graph"
 # MODEL PARAMETERS #
 #------------------#
 HISTORY_LENGTH=2 # days
-OUTPUT_DIMS=1
 
 #-----------------#
 # LOSS PARAMETERS #
@@ -123,12 +122,6 @@ if [ ${CTD_TRAINING} = true ] ; then
 	CTD_TRAINING="--ctd_training"
 else
 	CTD_TRAINING="--no-ctd_training"
-fi
-
-if [ ${FINE_TUNING} = true ] ; then
-	FINE_TUNING="--fine_tuning"
-else
-	FINE_TUNING="--no-fine_tuning"
 fi
 
 if [ ${MAKE_VAL_PLOTS} = true ] ; then
