@@ -147,7 +147,7 @@ class Trainer(object):
                         y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]
                         idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]
 
-                        metadata_file_path="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_plot_params.json"
+                        metadata_file_path=args.val_plot_config
                         with open(metadata_file_path) as f:
                             meta = json.load(f)
 

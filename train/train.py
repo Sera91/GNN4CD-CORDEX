@@ -15,9 +15,9 @@ from utils.helpers import find_not_all_nan_times, derive_train_val_idxs, derive_
 from utils.helpers import prepare_target_for_train
 from utils.training import Trainer
 from data.datasets import Graph_Dataset, custom_collate_fn_graph
-from models import MODEL_REGISTRY, build_model, update_parser_with_model_args
 from utils.predictand_transforms import transform_predictand
 from utils.predictor_transforms import transform_predictors
+from models import MODEL_REGISTRY, build_model, update_parser_with_model_args
 from utils.losses import LOSS_REGISTRY, build_loss, update_parser_with_loss_args
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -56,6 +56,7 @@ parser.add_argument('--no-ctd_training', dest='ctd_training', action='store_fals
 parser.add_argument('--make_val_plots', action='store_true')
 parser.add_argument('--no-make_val_plots', dest='make_val_plots', action='store_false')
 parser.add_argument('--val_plot_frequency', type=int)
+parser.add_argument('--val_plot_config', type=str)
 
 parser.add_argument('--loss_fn', type=str)
 parser.add_argument('--seed', type=int, default=100)
@@ -97,7 +98,6 @@ if __name__ == '__main__':
 
     # Set all seeds
     set_seed_everything(seed=args.seed)
-    #torch.manual_seed(args.seed)
 
     torch.backends.cudnn.benchmark = False
 
@@ -169,11 +169,7 @@ if __name__ == '__main__':
 #--------------------------------------------------------
 
     #-- Step 1 - Find valid time indices
-    idxs_not_all_nan = find_not_all_nan_times(target)
-
-    write_log(f"\nAfter removing all nan time indexes, {len(idxs_not_all_nan)}" +
-        f" time indexes are considered ({(len(idxs_not_all_nan) / target.shape[1] * 100):.1f} % of initial ones).",
-        args, accelerator, 'a')
+    idxs_not_all_nan = find_not_all_nan_times(target, L=args.history_length)
 
     #-- Step 2 - Compute train/val indices
     # Case 1: the user provides lists of train years and val years

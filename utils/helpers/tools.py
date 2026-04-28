@@ -62,19 +62,24 @@ def set_seed_everything(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-# Convert Python datetime to same type as time_index
 def convert_to_time_index_type(ts, ref):
-    """
+    """Convert a Python ``datetime`` object into the same temporal type used by a
+    reference time index.
 
     Parameters
     ----------
-    ts :
-        
-    ref :
-        
+    ts : datetime.datetime
+        A Python ``datetime`` object representing the timestamp to convert.
+    ref : datetime-like
+        A reference timestamp whose type determines the target conversion.
+        This is usually an element of ``time_index`` and may be one of:
+        - ``numpy.datetime64``
+        - ``datetime.datetime``
+        - ``cftime.datetime`` (e.g., ``DatetimeNoLeap``, ``Datetime360Day``)
 
     Returns
     -------
+        The transformed data
 
     """
     # Case 1: time_index uses numpy.datetime64
@@ -152,35 +157,37 @@ def date_to_idxs_from_timeindex(
     return start_idx
 
 
-def find_not_all_nan_times(target_train, history_length=24):
-    """Define a mask to ignore time indexes with all NaN values.
+def find_not_all_nan_times(data, L=24, args=None):
+    """Define a temporal mask, 1 if at least one spatial value is not nan.
 
     Parameters
     ----------
-    target_train : np.ndarray
-        
-    history_length :
-         (Default value = 24)
+    data : np.ndarray
+        The data of shape (num_nodes, time)
+    L : int
+        The first L values to be considered valid. (Default value = 24)
 
     Returns
     -------
-    
         idxs_not_all_nan (np.ndarray) of shape (k, 1)
 
     """
-
-    initial_time_dim = target_train.shape[1]
+    initial_time_dim = data.shape[1]
     mask_not_all_nan = []
 
     for t in range(initial_time_dim):
-        nan_sum = np.isnan(target_train[:, t]).sum()
-        mask_not_all_nan.append(nan_sum < target_train.shape[0])
+        nan_sum = np.isnan(target[:, t]).sum()
+        mask_not_all_nan.append(nan_sum < data.shape[0])
 
     mask_not_all_nan = np.array(mask_not_all_nan, dtype=bool)
 
     # Force first L time steps to be valid
-    mask_not_all_nan[:history_length] = True
+    mask_not_all_nan[:L] = True
     idxs_not_all_nan = np.argwhere(mask_not_all_nan)
+
+    write_log(f"\nNot all nan time indexes: {len(idxs_not_all_nan)} " +
+        f"({(len(idxs_not_all_nan) / data.shape[1] * 100):.1f} % of initial ones).",
+        args, accelerator, 'a')
 
     return idxs_not_all_nan
 

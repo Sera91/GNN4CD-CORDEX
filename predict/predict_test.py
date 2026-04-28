@@ -77,6 +77,29 @@ def return_test_idxs_from_years_list(years_list, time_index, history_length):
 
     return test_idxs, test_idxs_valid_subset
 
+def return_test_idxs(predictor: xr.Dataset, 
+                     period: str):
+    """Split data into training and test sets.
+    
+    Args:
+        predictor: Predictor dataset
+        period: periof experiment name. #(['1981-2000','2041-2060','2080-2099'])
+        
+    """
+    if period == 'historical':
+            years_test = list(range(1981, 2001))
+        
+    elif period == 'mid_century':
+            years_test = list(range(2041, 2061))
+    else:
+            years_test = list(range(2080, 2100))
+    
+    
+    test_idxs=np.argwhere(np.isin(predictor['time'].dt.year, years_test))
+    
+    return test_idxs
+
+
 
 THRESHOLD = 0.0
 
@@ -142,6 +165,8 @@ if __name__ == '__main__':
 
     predictors_filename = args.input_path_P + args.predictors_filename
     # Load the input dataset
+    predictor = xr.open_dataset(predictors_filename, engine="netcdf4")
+
     params = ['q', 't', 'u', 'v', 'z']
     levels = ['850', '700', '500']
     load_dataset = load_dataset_CORDEXML
@@ -193,7 +218,9 @@ if __name__ == '__main__':
     elif args.period == 'end_century':
         years_test = list(range(2080, 2100))
                          
-    test_idxs, test_idxs_valid_subset = return_test_idxs_from_years_list(years_test, low_time_index, history_length)
+    # test_idxs, test_idxs_valid_subset = return_test_idxs_from_years_list(years_test, low_time_index, history_length)
+    test_idxs = return_test_idxs(predictor, args.period).squeeze()
+    test_idxs_valid_subset = test_idxs[history_length:]
 
     # Statistics computed on training data
     means_low = np.load(args.train_path + "means_low.npy")
@@ -231,17 +258,6 @@ if __name__ == '__main__':
         stats_save_path=None
     )
 
-    # x_low_test_std, x_high_std = standardize_input(
-    #     x_low=x_low_test,
-    #     x_high=orog,
-    #     means_low=means_low,
-    #     stds_low=stds_low,
-    #     means_high=means_high,
-    #     stds_high=stds_high,
-    #     n_vars=n_vars,
-    #     high_independent_vars=HIGH_INDEPENDENT_VARS,
-    # )
-    
     #-- Add the other high-res features
     if use_mask_sealand:
         x_high_std = np.concatenate((x_high_std, mask_sealand), axis=-1)

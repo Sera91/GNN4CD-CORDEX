@@ -90,6 +90,7 @@ USE_ACCELERATE=true
 #------------------#
 MAKE_VAL_PLOTS=true
 VAL_PLOT_FREQUENCY=1
+VAL_PLOT_CONFIG="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_plot_params.json"
 
 #-----------------#
 # TRAINING PERIOD #
