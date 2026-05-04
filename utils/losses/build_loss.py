@@ -1,12 +1,12 @@
 import inspect
-from .registry import LOSS_REGISTRY
+from .registry import get_loss
 
 def build_loss(args):
     """ 
     To instantate the LossClass with only
     the args in its signature
     """
-    LossClass = LOSS_REGISTRY[args.loss_name]
+    LossClass = get_loss(args.loss_name)
 
     sig = inspect.signature(LossClass.__init__)
     allowed = set(sig.parameters.keys()) - {"self"}

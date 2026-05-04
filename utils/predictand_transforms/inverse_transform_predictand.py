@@ -1,5 +1,5 @@
 import numpy as np
-from .registry import PREDICTAND_INVERSE_TRANSFORM_REGISTRY
+from .registry import get_predictand_inverse_transform
 
 def inverse_transform_predictand(values_norm, stats):
     """
@@ -10,8 +10,7 @@ def inverse_transform_predictand(values_norm, stats):
     mode = stats["mode"].item()
     if isinstance(mode, np.ndarray):
         mode = mode.item()
+    
+    values = get_predictand_inverse_transform(mode)(values_norm, stats)
 
-    if mode not in PREDICTAND_INVERSE_TRANSFORM_REGISTRY:
-        raise ValueError(f"Unknown inverse transformation mode: {mode}")
-
-    return PREDICTAND_INVERSE_TRANSFORM_REGISTRY[mode](values_norm, stats)
+    return values

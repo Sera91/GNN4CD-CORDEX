@@ -48,10 +48,7 @@ python -m preprocess.preprocess \
 --land_use_path=${LAND_USE_PATH} \
 --land_use_file=${LAND_USE_FILE} \
 --target_type=${TARGET_TYPE} \
---target_multiplier=${TARGET_MULTIPLIER} \
---low_transformed_time_res=${LOW_TRANSFORMED_TIME_RES} \
---high_transformed_time_res=${HIGH_TRANSFORMED_TIME_RES}
-
+--target_multiplier=${TARGET_MULTIPLIER}
 EOT
 
 

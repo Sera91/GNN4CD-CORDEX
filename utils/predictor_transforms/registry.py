@@ -1,5 +1,3 @@
-# utils/predictor_transforms/registry.py
-
 PREDICTOR_TRANSFORM_REGISTRY = {}
 
 def register_predictor_transform(mode):
@@ -11,3 +9,8 @@ def register_predictor_transform(mode):
         PREDICTOR_TRANSFORM_REGISTRY[mode] = func
         return func
     return decorator
+
+def get_predictor_transform(mode):
+    if mode not in PREDICTOR_TRANSFORM_REGISTRY:
+        raise ValueError(f"Unknown predictor transform: {mode}")
+    return PREDICTOR_TRANSFORM_REGISTRY[mode]

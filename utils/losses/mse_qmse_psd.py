@@ -1,7 +1,7 @@
 import torch.nn as nn
 from .registry import register_loss
-from.psd import PSDLoss
-from.qmse import QMSELoss
+from.psd import PSD_Loss
+from.qmse import QMSE_Loss
 
 
 @register_loss("MSE_QMSE_PSD_Loss")
@@ -32,8 +32,8 @@ class MSE_QMSE_PSD_Loss(nn.Module):
         self.alpha = alpha
         self.beta = beta
         self.mse_loss_fn = nn.MSELoss()
-        self.qmse_loss_fn = QMSELoss(balance)
-        self.psd_loss_fn = PSDLoss(apply_expm1=True, *psd_args, **psd_kwargs)
+        self.qmse_loss_fn = QMSE_Loss(balance)
+        self.psd_loss_fn = PSD_Loss(apply_expm1=True, *psd_args, **psd_kwargs)
 
     def forward(self, pred, target, bins):
         pred = pred.squeeze()

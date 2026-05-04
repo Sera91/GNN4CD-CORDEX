@@ -22,3 +22,13 @@ def register_predictand_inverse_transform(mode):
         PREDICTAND_INVERSE_TRANSFORM_REGISTRY[mode] = func
         return func
     return decorator
+
+def get_predictand_transform(mode):
+    if mode not in PREDICTAND_TRANSFORM_REGISTRY:
+        raise ValueError(f"Unknown predictand transform: {mode}")
+    return PREDICTAND_TRANSFORM_REGISTRY[mode]
+
+def get_predictand_inverse_transform(mode):
+    if mode not in PREDICTAND_INVERSE_TRANSFORM_REGISTRY:
+        raise ValueError(f"Unknown predictand inverse transform: {mode}")
+    return PREDICTAND_INVERSE_TRANSFORM_REGISTRY[mode]

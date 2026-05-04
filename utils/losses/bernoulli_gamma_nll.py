@@ -4,7 +4,7 @@ from .registry import register_loss
 
 
 @register_loss("Bernoulli_Gamma_NLL_Loss")
-class BernoulliGammaNLLLoss(nn.Module):
+class Bernoulli_Gamma_NLL_Loss(nn.Module):
     output_dim = 3 # class attribute
 
     def __init__(self, ignore_nans=True, eps=1e-6):

@@ -122,6 +122,13 @@ if __name__ == '__main__':
 #-------------------  TRAIN/VAL IDXS --------------------
 #--------------------------------------------------------
 
+    idxs_not_all_nan = find_not_all_nan_times(
+        data=target,
+        L=args.history_length,
+        args=args,
+        accelerator=accelerator
+        )
+
     cfg = detect_train_val_idxs_config(args)
 
     # Case 1 and 2: year-based logic
@@ -192,7 +199,7 @@ if __name__ == '__main__':
     write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
 
     # 2. Transform predictand
-    if args.loss_name == "BernoulliGammaNLLLoss":
+    if args.loss_name == "Bernoulli_Gamma_NLL_Loss":
         target_trans = target
     else:
         target_trans = transform_predictand(

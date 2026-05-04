@@ -1,3 +1,7 @@
-from .bernoulli_gamma_nll_extractor import extract_bernoulli_gamma_mean
-from .gaussian_nll_extractor import extract_gaussian_nll_mean
-from .mse_qmse_psd_extractor import extract_mse_qmse_psd
+import pkgutil
+import importlib
+from .registry import EXTRACTOR_REGISTRY, register_extractor, get_extractor
+
+# Automatically import all modules in this package
+for module_info in pkgutil.iter_modules(__path__):
+    importlib.import_module(f"{__name__}.{module_info.name}")

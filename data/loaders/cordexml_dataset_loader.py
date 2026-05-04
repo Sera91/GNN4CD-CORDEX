@@ -1,9 +1,10 @@
 import numpy as np
 from utils.helpers.tools import write_log
 from data.loaders.read_dataset import read_dataset
+from .registry import register_dataset_loader
 
 
-@register_dataset
+@register_dataset_loader("CORDEXML")
 def load_dataset_CORDEXML(
     file_path,
     file,

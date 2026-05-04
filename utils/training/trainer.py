@@ -63,15 +63,18 @@ class Trainer(object):
 
                 # Get target and mask from graph
                 train_mask = graph['high'].train_mask
-                y_trans = graph["high"].y
+                y = graph["high"].y
 
-                y_out_trans = model(graph)
+                y_out = model(graph)
 
                 if getattr(loss_fn, "use_bins", False):
                     bins = graph['high'].w
-                    loss, loss_components = loss_fn(y_out_trans, y_trans, bins)
+                    loss, loss_components = loss_fn(y_out, y, bins)
                 else:
-                    loss, loss_components = loss_fn(y_out_trans, y_trans)  # the loss internally handles the different y_out cases
+                    if getattr(loss_fn, "components", False):
+                        loss, loss_components = loss_fn(y_out, y)  # the loss internally handles the different y_out cases
+                    else:
+                        loss = loss_fn(y_out, y)  # the loss internally handles the different y_out cases
                 
                 optimizer.zero_grad()
                 accelerator.backward(loss)
@@ -80,11 +83,11 @@ class Trainer(object):
                 step += 1
                 
                 # Log values to wandb
-                loss_meter.update(val=loss.item(), n=y_trans.shape[0])
+                loss_meter.update(val=loss.item(), n=y.shape[0])
 
                 if getattr(loss_fn, "components", False):
                     for i, component in enumerate(loss_fn.components):
-                        loss_meter_components[component].update(val=loss_components[i].item(), n=y_trans.shape[0])
+                        loss_meter_components[component].update(val=loss_components[i].item(), n=y.shape[0])
                 
                 accelerator.log({
                     'epoch':epoch,
@@ -130,20 +133,23 @@ class Trainer(object):
                         
                         # Get target and mask from graph
                         train_mask = graph['high'].train_mask
-                        y_trans = graph["high"].y
+                        y = graph["high"].y
 
-                        y_out_trans = model(graph)
+                        y_out = model(graph)
                         
                         if getattr(loss_fn, "use_bins", False):
-                            weights = graph['high'].w
-                            loss, loss_components = loss_fn(y_out_trans, y_trans, weights)
+                            bins = graph['high'].w
+                            loss, loss_components = loss_fn(y_out, y, bins)
                         else:
-                            loss, loss_components = loss_fn(y_out_trans, y_trans)  # the loss internally handles the different y_out cases
+                            if getattr(loss_fn, "components", False):
+                                loss, loss_components = loss_fn(y_out, y)  # the loss internally handles the different y_out cases
+                            else:
+                                loss = loss_fn(y_out, y)  # the loss internally handles the different y_out cases
 
-                        val_loss_meter.update(val=loss.item(), n=y_trans.shape[0])
+                        val_loss_meter.update(val=loss.item(), n=y.shape[0])
                         if getattr(loss_fn, "components", False):
                             for i, component in enumerate(loss_fn.components):
-                                val_loss_meter_components[component].update(val=loss_components[i].item(), n=y_trans.shape[0])
+                                val_loss_meter_components[component].update(val=loss_components[i].item(), n=y.shape[0])
 
                         accelerator.log({
                             'epoch':epoch,
@@ -152,12 +158,7 @@ class Trainer(object):
                         }, step=step)
                         
                         if args.make_val_plots:
-                            y_pred_trans = extract_prediction(y_out_trans, args.loss_name)
-                            stats = np.load(args.output_path+"predictand_stats.npz", allow_pickle=True)
-                            
-                            # Get the actual precipitation/temperature prediction
-                            y = inverse_transform_predictand(y_trans, stats)
-                            y_pred = inverse_transform_predictand(y_pred_trans, stats)
+                            y_pred = extract_prediction(y_out, args.loss_name)
 
                             # Retrieve graphs for individual time instances
                             n_nodes = graph["high"].num_nodes
@@ -195,6 +196,11 @@ class Trainer(object):
                         times = times[indices]
 
                         print(f"y_pred_all.shape: {y_pred_all.shape}, y_all.shape: {y_all.shape}, indices.shape: {indices.shape}")
+
+                        # Get the actual precipitation/temperature prediction
+                        stats = np.load(args.output_path+"predictand_stats.npz", allow_pickle=True)
+                        y_all = inverse_transform_predictand(y_all, stats)
+                        y_pred_all = inverse_transform_predictand(y_pred_all, stats)
 
                         # Load validation plots metadata
                         metadata_file_path = args.val_plot_config

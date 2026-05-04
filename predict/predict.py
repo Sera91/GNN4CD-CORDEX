@@ -28,7 +28,7 @@ from utils.predictions.detect_predictions_idxs_config import detect_predictions_
 from utils.extractors.extract_prediction import extract_prediction
 from utils.predictand_transforms.inverse_transform_predictand import inverse_transform_predictand
 from utils.predictor_transforms.transform_predictors import transform_predictors
-from utils.losses.registry import LOSS_REGISTRY
+from utils.losses.registry import get_loss
 
 from predict.add_base_args import add_base_args
 from predict.add_target_specific_args import add_target_specific_args
@@ -181,7 +181,7 @@ if __name__ == '__main__':
     parser = add_model_specific_args(parser, args.model_name)
     args = parser.parse_args()
 
-    LossClass = LOSS_REGISTRY[args.loss_name]
+    LossClass = get_loss(args.loss_name)
     output_dim = LossClass.output_dim
     
     model = build_model(

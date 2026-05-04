@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
+from .registry import register_loss
 
 
 @register_loss("PSD_Loss")
-class PSDLoss(nn.Module):
+class PSD_Loss(nn.Module):
     """
     PSD loss for single-channel 2D fields.
     pred, target: (B, H, W) or (B, 1, H, W)

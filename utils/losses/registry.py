@@ -1,5 +1,3 @@
-# utils/losses/registry.py
-
 LOSS_REGISTRY = {}
 
 def register_loss(name):

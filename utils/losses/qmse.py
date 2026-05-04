@@ -2,10 +2,11 @@ import torch
 import torch.nn as nn
 import numpy as np
 from utils.helpers.tools import write_log
+from .registry import register_loss
 
 
 @register_loss("QMSE_Loss")
-class QMSELoss(nn.Module):
+class QMSE_Loss(nn.Module):
 
     @staticmethod
     def add_loss_specific_args(parser):
