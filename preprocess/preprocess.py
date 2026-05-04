@@ -12,10 +12,10 @@ transform = T.AddLaplacianEigenvectorPE(k=2)
 
 from utils.helpers.tools import write_log
 from data.structures.graph import derive_edge_index_within, derive_edge_index_multiscale
-from data.loaders.complete_loader import load_dataset_CORDEXML
-from data.loaders.netcdf_loader import read_dataset
+from data.loaders.read_dataset import read_dataset
 
 from preprocess.add_base_args import add_base_args
+from utils.datasets.registry import DATASET_REGISTRY
 
 
 #-----------------------------------------------------
@@ -29,10 +29,6 @@ args = parser.parse_args()
 
 time_start = time.time()
 
-params = ['q', 't', 'u', 'v', 'z']
-levels = ['850', '700', '500']
-load_dataset = load_dataset_CORDEXML
-
 write_log(f"Input path: {args.input_path_predictors}", args, accelerator=None, mode='w')
 
 #-----------------------------------------------------
@@ -42,6 +38,10 @@ write_log(f"Input path: {args.input_path_predictors}", args, accelerator=None, m
 write_log(f"\n\n#### Preprocessing of the low resolution data.", args, accelerator=None, mode='a')
 
 # Load the input dataset
+params = args.params.split(",")
+levels = [int(l) for l in args.levels.split(",")]
+load_dataset = DATASET_REGISTRY[args.dataset_name]
+
 input_ds, lat_low, lon_low, low_time_index, low_native_time_res, low_time_res = load_dataset(
     params=params, levels=levels, file_path=args.input_path_predictors, file=args.predictors_file, args=args)
 

@@ -32,11 +32,8 @@ def add_base_args(parser):
     parser.add_argument('--target_type', type=str, default="precipitation")
     parser.add_argument('--target_multiplier', type=float, default=1)
 
-    parser.add_argument('--low_transformed_time_res', type=str, default="1h")
-    parser.add_argument('--high_transformed_time_res', type=str, default="1h")
-
-    #-- era5
-    parser.add_argument('--input_files_suffix_low', type=str, default='')
-    parser.add_argument('--n_levels_low', type=int, help='number of pressure levels considered', default=5)
+    parser.add_argument("--params", type=str, default="q,t,u,v,z", help="Comma-separated list of variable names")
+    parser.add_argument("--levels", type=str, default="850,700,500", help="Comma-separated list of pressure levels")
+    parser.add_argument("--dataset_name", type=str, default="CORDEXML", choices=["CORDEXML", "ERA5", "CMIP6"], help="Name of the dataset loader to use")
 
     return parser

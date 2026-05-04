@@ -1,8 +1,9 @@
 import numpy as np
 from utils.helpers.tools import write_log
-from data.loaders.netcdf_loader import read_dataset
+from data.loaders.read_dataset import read_dataset
 
 
+@register_dataset
 def load_dataset_CORDEXML(
     file_path,
     file,
