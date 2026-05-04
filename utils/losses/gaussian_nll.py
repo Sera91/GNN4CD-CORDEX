@@ -3,7 +3,7 @@ import torch.nn as nn
 from .registry import register_loss
 
 
-@register_loss("GaussianNLLLoss")
+@register_loss("Gaussian_NLL_Loss")
 class GaussianNLLLoss(nn.Module):
     output_dim = 2 # class attribute
 

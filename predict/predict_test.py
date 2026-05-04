@@ -10,48 +10,19 @@ from accelerate import Accelerator
 from torch_geometric.data import HeteroData
 import xarray as xr
 
-from data.datasets import Graph_Dataset, custom_collate_fn_graph
-from data.loaders import load_dataset_CORDEXML
-from utils.predictions import Predictor
-from utils.helpers import set_seed_everything, write_log, standardize_input, invert_normalization, date_to_idxs_from_timeindex
-from models import build_model, update_parser_with_model_args
-from utils.extractors import extract_prediction
-from utils.predictand_transforms import inverse_transform_predictand
+from models.build_model import build_model
+from models.add_model_specific_args import add_model_specific_args
+from data.datasets.graph_dataset import Graph_Dataset, custom_collate_fn_graph
+from data.loaders.complete_loader import load_dataset_CORDEXML
+from utils.predictions.predictor import Predictor
+from utils.helpers.tools import set_seed_everything, write_log, date_to_idxs_from_timeindex
+from utils.extractors.extract_prediction import extract_prediction
+from utils.predictand_transforms.inverse_transform_predictand import inverse_transform_predictand
+from utils.predictor_transforms.transform_predictors import transform_predictors
 from utils.losses.registry import LOSS_REGISTRY
+from predict.add_base_args_test import add_base_args_test
+from predict.add_target_specific_args import add_target_specific_args
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-#-- paths
-parser.add_argument('--domain', type=str)
-parser.add_argument('--experiment', type=str)
-parser.add_argument('--period', type=str)
-parser.add_argument('--train_path', type=str, help='path to logfile directory')
-parser.add_argument('--input_path_P', type=str, help='path to test predictors directory')
-parser.add_argument('--input_path', type=str, help='path to input directory')
-parser.add_argument('--output_path', type=str, help='path to output directory')
-parser.add_argument('--log_path', type=str, help='path to logfile directory')
-parser.add_argument('--log_file', type=str, default='log.txt', help='log file')
-parser.add_argument('--predictors_filename', type=str, help='filename')
-parser.add_argument('--model_name', type=str, default=None)
-parser.add_argument('--history_length', type=str)
-parser.add_argument('--dataset_name', type=str, default=None)  
-parser.add_argument('--graph_file', type=str, default=None)
-parser.add_argument('--output_file', type=str, default="test_predictions.pkl")
-parser.add_argument('--output_file_season', type=str, default="test_seasonal_predictions.pkl")
-parser.add_argument('--seed', type=int, default=80)
-parser.add_argument('--batch_size', type=int)
-parser.add_argument('--checkpoint', type=str, default=None)
-parser.add_argument('--orog_file', type=str, default=None)
-parser.add_argument('--mask_sealand_file', type=str, default=None)
-parser.add_argument('--coords_ij_file', type=str, default=None)
-parser.add_argument('--metadata_file', type=str, default=None) 
-parser.add_argument('--run_type', type=str)
-parser.add_argument('--target_type', type=str, default="precipitation")
-parser.add_argument('--use_accelerate',  action='store_true')
-parser.add_argument('--no-use_accelerate', dest='use_accelerate', action='store_false')
-
-parser.add_argument('--make_plots',  action='store_true')
-parser.add_argument('--no-make_plots', dest='make_plots', action='store_false')
 
 def return_test_idxs_from_years_list(years_list, time_index, history_length):
     test_idxs_list = []
@@ -87,33 +58,27 @@ def return_test_idxs(predictor: xr.Dataset,
         
     """
     if period == 'historical':
-            years_test = list(range(1981, 2001))
+        years_test = list(range(1981, 2001))
         
     elif period == 'mid_century':
-            years_test = list(range(2041, 2061))
+        years_test = list(range(2041, 2061))
     else:
-            years_test = list(range(2080, 2100))
-    
+        years_test = list(range(2080, 2100))
     
     test_idxs=np.argwhere(np.isin(predictor['time'].dt.year, years_test))
     
     return test_idxs
 
 
-
-THRESHOLD = 0.0
-
-HISTORY_LENGTH_MAP = {
-    "1h": 24,   # [t-24,...,t]
-    "3h": 8,    # [t-24,t-21,...,t]
-    "6h": 4,    # [t-24,t-18,t-12,t-6,t]
-    "1d": 2,    # [t-2,t-1,t]
-}   
-
-HIGH_INDEPENDENT_VARS = True
-
 if __name__ == '__main__':
 
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = add_base_args_test(parser)
+
+    args, unknown = parser.parse_known_args()
+
+    # Update args with target-specific arguments
+    parser = add_target_specific_args(parser, args.target_type)
     args = parser.parse_args()
     
     # Set all seeds
@@ -122,14 +87,15 @@ if __name__ == '__main__':
     if not os.path.exists(args.output_path):
        os.makedirs(args.output_path)
         
-    if args.use_accelerate is True:
+    if args.use_accelerate:
         accelerator = Accelerator()
         print("I am using accelerator")
     else:
         accelerator = None
         print("I am not using accelerator")
 
-    write_log(f"Starting the testing for run: {args.train_path}", args, accelerator, 'w')
+    write_log(f"Starting the testing for epoch {args.epoch}...", args, accelerator, 'w')
+    write_log(f"\nUsing {args.checkpoint}, training path: {args.train_path}", args, accelerator, 'w')
     write_log(f"\nCuda is available: {torch.cuda.is_available()}. There are {torch.cuda.device_count()} available GPUs.", args, accelerator, 'a')
 
 #--------------------------------------------------------
@@ -163,81 +129,51 @@ if __name__ == '__main__':
     with open(args.input_path + args.metadata_file, "r") as f:
         metadata = json.load(f)
 
+    #--6 Original netcdf predictors
     predictors_filename = args.input_path_P + args.predictors_filename
-    # Load the input dataset
-    predictor = xr.open_dataset(predictors_filename, engine="netcdf4")
-
-    params = ['q', 't', 'u', 'v', 'z']
-    levels = ['850', '700', '500']
-    load_dataset = load_dataset_CORDEXML
 
     # Load the input dataset
-    input_ds, lat_low, lon_low, low_time_index, low_native_time_res, low_time_res = load_dataset(
-        params=params, levels=levels, file_path=args.input_path_P, file=args.predictors_filename, args=args)
+    x_low, lat_low, lon_low, time_index, _, _ = load_dataset_CORDEXML(
+        file_path=args.input_path_P,
+        file=args.predictors_filename,
+        args=args
+        )
 
     if lat_low[0] > lat_low[-1]:
         write_log(f"\nFlipping the lat axes to have the origin in the bottom left corner", args, accelerator=None, mode='a')
-        lat_low = np.flip(lat_low, axis=0)  # Flip the latitude array along the first axis
-        input_ds = np.flip(input_ds, axis=3) # time, var, lev, lat, lon
+        x_low = np.flip(x_low, axis=3) # time, var, lev, lat, lon
 
     if lon_low[0] > lon_low[-1]:
         write_log(f"\nFlipping the lon axes to have the origin in the bottom left corner", args, accelerator=None, mode='a')
-        lon_low = np.flip(lon_low, axis=0)  # Flip the latitude array along the first axis
-        input_ds = np.flip(input_ds, axis=4) # time, var, lev, lat, lon
+        x_low = np.flip(x_low, axis=4) # time, var, lev, lat, lon
 
-    lat_low, lon_low = np.meshgrid(lat_low, lon_low, indexing='ij')
-
-    lat_low = lat_low.flatten()
-    lon_low = lon_low.flatten()
-
-    input_ds = np.transpose(input_ds, (3, 4, 0, 1, 2)) #torch.permute(input_ds, (3,4,0,1,2)) # lat, lon, time, vars, levels
-    input_ds = input_ds.reshape(-1, *input_ds.shape[2:]) # num_nodes, time, vars, levels
+    x_low = np.transpose(x_low, (3, 4, 0, 1, 2)) #torch.permute(x_low, (3,4,0,1,2)) # lat, lon, time, vars, levels
+    x_low = x_low.reshape(-1, *x_low.shape[2:]) # num_nodes, time, vars, levels
 
     # conditional (depends on how the graph was preprocessed)
     src = low_high_graph["low", "to", "high"].edge_index[0,:]              # shape (2,num_edges)
     unique_src = np.unique(src)
-    num_low = input_ds.shape[0]
+    num_low = x_low.shape[0]
     if unique_src.shape[0] != num_low:
         write_log(f"\nLoading unique_src.npy to update the predictors, keeping only the points corresponding to the Low nodes (from {num_low} to {unique_src.shape[0]})", args, accelerator=None, mode='a')
         unique_src = np.load(args.input_path + "unique_src.npy")
-        input_ds = input_ds[unique_src]
+        x_low = x_low[unique_src]
 
-    n_vars = input_ds.shape[2]
-    n_levels = input_ds.shape[3]
+    n_vars = x_low.shape[2]
+    n_levels = x_low.shape[3]
 
-    history_length = HISTORY_LENGTH_MAP.get(low_time_res) # lookup for the predictors
-    if history_length is None:
-        raise ValueError(f"Unknown time resolution: {low_time_res}")
-    
-    seq_length = history_length + 1 # total length of the sequence for the RNN model
+    #-----------------------------------------------------
+    #---------------------- INDICES  ---------------------
+    #-----------------------------------------------------
 
-    if args.period == 'historical':
-        years_test = list(range(1981, 2001))
-    elif args.period == 'mid_century':
-        years_test = list(range(2041, 2061))
-    elif args.period == 'end_century':
-        years_test = list(range(2080, 2100))
-                         
-    # test_idxs, test_idxs_valid_subset = return_test_idxs_from_years_list(years_test, low_time_index, history_length)
+    # test_idxs, test_idxs_valid_subset = return_test_idxs_from_years_list(years_test, low_time_index, args.history_length)
+    predictor = xr.open_dataset(predictors_filename, engine="netcdf4")
     test_idxs = return_test_idxs(predictor, args.period).squeeze()
-    test_idxs_valid_subset = test_idxs[history_length:]
+    test_idxs_valid_subset = test_idxs[args.history_length:]
 
-    # Statistics computed on training data
-    means_low = np.load(args.train_path + "means_low.npy")
-    stds_low = np.load(args.train_path + "stds_low.npy")
-    means_high = np.load(args.train_path + "means_high.npy")
-    stds_high = np.load(args.train_path + "stds_high.npy")
-    
-    write_log(f"\nLoaded input statistics:", args, accelerator, 'a')
-    write_log(f"  means_low shape: {means_low.shape}", args, accelerator, 'a')
-    write_log(f"  stds_low shape: {stds_low.shape}", args, accelerator, 'a')
-
-    write_log(f"\ntest_idxs shape: {test_idxs.shape}", args, accelerator, 'a')
-    write_log(f"\ntest_idxs: {test_idxs}", args, accelerator, 'a')
-    
     #-- Slice time index and target
-    time_index_test = low_time_index[test_idxs]
-    x_low_test = input_ds[:, test_idxs, :, :] #
+    time_index_test = time_index[test_idxs]
+    x_low_test = x_low[:, test_idxs, :, :] # num_nodes, time, vars, levels
 
     write_log(f"\nTest start idx: {test_idxs_valid_subset[0]} - {time_index_test[test_idxs_valid_subset[0]]}", args, accelerator, 'a')
     write_log(f"\nTest end idx: {test_idxs_valid_subset[0]} - {time_index_test[test_idxs_valid_subset[-1]]}", args, accelerator, 'a')
@@ -245,9 +181,17 @@ if __name__ == '__main__':
     write_log(f"\n the first ten idx are {test_idxs[0:10]}", args, accelerator, 'a')
     write_log(f"\n val idx type {type(test_idxs)}", args, accelerator, 'a')
 
-    write_log(f"\nStandardizing input data.", args, accelerator, 'a')
+    write_log(f"\ntest_idxs shape: {test_idxs.shape}", args, accelerator, 'a')
+    write_log(f"\ntest_idxs: {test_idxs}", args, accelerator, 'a')
 
-    predictors_stats = args.train_path + "predictors_stats.npz"
+    #-----------------------------------------
+    #---------  TRANSFORM PREDICTORS ---------
+    #-----------------------------------------
+
+# 1. Transform predictors
+    write_log(f"\nTransforming predictor data.", args, accelerator, 'a')
+
+    predictors_stats = np.load(args.train_path + "predictors_stats.npz", allow_pickle=True)
     x_low_test_std, x_high_std = transform_predictors(
         x_low=x_low_test,
         x_high=orog,
@@ -258,7 +202,14 @@ if __name__ == '__main__':
         stats_save_path=None
     )
 
-    #-- Add the other high-res features
+    n_vars = x_low_test_std.shape[2]
+    n_levels = x_low_test_std.shape[3]
+
+    # 1.2 Flatten x_low_test_std
+    N, T = x_low_test_std.shape[:2] 
+    x_low_test_std = x_low_test_std.reshape(N, T, -1) # num_nodes, time, vars*levels
+    
+    # 1.3 Add high_res predictors which are not transformed
     if use_mask_sealand:
         x_high_std = np.concatenate((x_high_std, mask_sealand), axis=-1)
         write_log(f"\nAdding mask sea-land node features", args, accelerator, 'a')
@@ -267,27 +218,29 @@ if __name__ == '__main__':
         x_high_std = np.concatenate((x_high_std, coords_ij), axis=-1)
         write_log(f"\nAdding ij node features", args, accelerator, 'a')
 
-    #-- Step 3 - torch tensors from numpy arrays
-    test_idxs = torch.from_numpy(test_idxs).int()
-    x_low_test_std = torch.from_numpy(x_low_test_std).float()
-    x_high_std = torch.from_numpy(x_high_std).float()
-
-    x_low_test_std = torch.flatten(x_low_test_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
-
     n_static_high = x_high_std.shape[1]
 
     write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
-
+    
     #-----------------------------------------------------
-    #------------------------ MODEL ----------------------
+    #-------------- FROM NUMPY TO PYTORCH ----------------
     #-----------------------------------------------------
 
-    loss_class = LOSS_REGISTRY[args.loss_name]
-    output_dim = loss_class.output_dim
+    # Predictors
+    x_low_test_std = torch.from_numpy(x_low_test_std).float()
+    x_high_std = torch.from_numpy(x_high_std).float()
 
-    parser = update_parser_with_model_args(args.model_name)
+    #--------------------------------------------
+    #-------------- BUILD MODEL -----------------
+    #--------------------------------------------
+
+    # Update args with loss- and model-specific arguments
+    parser = add_model_specific_args(parser, args.model_name)
     args = parser.parse_args()
 
+    LossClass = LOSS_REGISTRY[args.loss_name]
+    output_dim = LossClass.output_dim
+    
     model = build_model(
         x_low_var_dim=n_vars,
         x_low_lev_dim=n_levels,
@@ -301,14 +254,13 @@ if __name__ == '__main__':
     #-----------------------------------------------------
 
     if accelerator is None:
-        checkpoint = torch.load(args.train_path + args.checkpoint, map_location=torch.device('cpu'), weights_only=True)
+        checkpoint = torch.load(args.train_path + args.checkpoint + "/pytorch_model.bin", map_location=torch.device('cpu'), weights_only=True)
         device = 'cpu'
     else:
         checkpoint = torch.load(args.train_path + args.checkpoint + "/pytorch_model.bin", weights_only=True)
         device = accelerator.device
     
     write_log("\nLoading state dict.", args, accelerator, 'a')
-    
     model.load_state_dict(checkpoint)
 
     #-----------------------------------------------------
@@ -317,11 +269,11 @@ if __name__ == '__main__':
     
     write_log(f"\nDefining dataset and dataloader.", args, accelerator, 'a')
     graph_dataset_tmp = Graph_Dataset(
+        graph=low_high_graph,
         low_input=x_low_test_std,
         high_input=x_high_std,
-        graph=low_high_graph,
         target=None,
-        history_length=history_length,
+        history_length=args.history_length,
     )
 
     graph_dataset = torch.utils.data.Subset(graph_dataset_tmp, test_idxs_valid_subset) # it's just a view of the original dataset
@@ -342,31 +294,34 @@ if __name__ == '__main__':
         model, dataloader = accelerator.prepare(model, dataloader)
 
     #-----------------------------------------------------
-    #----------------------- TEST ------------------------
+    #------------------- PREDICTIONS ---------------------
     #-----------------------------------------------------
 
     write_log(f"\nStarting the test, from " +
               f"{time_index_test[test_idxs_valid_subset.min()]} to idx {time_index_test[test_idxs_valid_subset.max()]}.", args, accelerator, 'a')
 
     start = time.time()
-    y_out_trans, idxs = Predictor.predict(model, dataloader, args=args, accelerator=accelerator)
+    predictor = Predictor()
+    y_out_trans, idxs = predictor.predict(model, dataloader, args=args, accelerator=accelerator)
     end = time.time()
 
     write_log(f"\nTest Done! \nNow post-processing results.", args, accelerator, 'a')
 
-    # POST PROCESS PREDICTIONS
+    #-----------------------------------------------------
+    #------------------ POST-PROCESSING ------------------
+    #-----------------------------------------------------
 
-    y_pred_trans = extract_prediction(y_out_trans, loss_fn=args.loss_fn)
+    y_pred_trans = extract_prediction(y_out_trans, loss_name=args.loss_name)
 
     # from raw model prediction to actual pr/tasmax values
-    predictand_stats = np.load(args.train_path+"predictand_stats.npz", allow_pickle=True)
+    predictand_stats = np.load(args.train_path + "predictand_stats.npz", allow_pickle=True)
     y_pred = inverse_transform_predictand(y_pred_trans, predictand_stats)
+
     if accelerator is not None:
         accelerator.wait_for_everyone()
 
         # Gather the values in *tensor* across all processes and concatenate them on the first dimension. Useful to
         # regroup the predictions from all processes when doing evaluation.
-
         idxs = accelerator.gather(idxs)[: len(graph_dataset)]
         idxs, indices = torch.sort(idxs)
         idxs = idxs.cpu().numpy()
@@ -378,7 +333,7 @@ if __name__ == '__main__':
         
 
     if args.target_type == "precipitation":
-        y_pred[y_pred<THRESHOLD] = 0.0
+        y_pred[y_pred < args.threshold] = 0.0
 
     # LON LAT
     lat_low = low_high_graph["low"].lat.cpu().numpy()
@@ -397,7 +352,10 @@ if __name__ == '__main__':
     #     if y_pred is not None:
     #         y_pred[~mask,:] = np.nan
 
-    # CREATE THE DATA OBJECT
+    #-----------------------------------------------------
+    #-------------------- SAVE RESULTS -------------------
+    #-----------------------------------------------------
+
     data = HeteroData()
 
     if args.target_type == "precipitation":
@@ -416,5 +374,3 @@ if __name__ == '__main__':
     if accelerator is None or accelerator.is_main_process:
         with open(args.output_path + args.output_file, 'wb') as f:
             pickle.dump(data, f)
-
-    

@@ -1,21 +1,23 @@
 import torch.nn as nn
-from utils.losses import PSDLoss
-from utils.losses import QMSELoss
 from .registry import register_loss
+from.psd import PSDLoss
+from.qmse import QMSELoss
 
 
 @register_loss("MSE_QMSE_PSD_Loss")
 class MSE_QMSE_PSD_Loss(nn.Module):
     output_dim = 1 # class attribute
+    use_bins = True
+    components = ["MSE", "QMSE", "PSD"]
 
     @staticmethod
     def add_loss_specific_args(parser):
-        parser.add_argument("--alpha", type=float, default=0.005)
-        parser.add_argument("--beta", type=float, default=0.005)
-        parser.add_argument('--binmin', type=float, default=0.0)
-        parser.add_argument('--binmax', type=float, default=1000)
-        parser.add_argument('--binwidth', type=float, default=0.5)
-        parser.add_argument('--binscale', type=str, default="log")
+        parser.add_argument("--alpha", type=float)
+        parser.add_argument("--beta", type=float)
+        parser.add_argument('--binmin', type=float)
+        parser.add_argument('--binmax', type=float)
+        parser.add_argument('--binwidth', type=float)
+        parser.add_argument('--binscale', type=str)
         return parser
 
     def __init__(
@@ -33,13 +35,10 @@ class MSE_QMSE_PSD_Loss(nn.Module):
         self.qmse_loss_fn = QMSELoss(balance)
         self.psd_loss_fn = PSDLoss(apply_expm1=True, *psd_args, **psd_kwargs)
 
-    def __call__(self, pred, target, bins):
+    def forward(self, pred, target, bins):
+        pred = pred.squeeze()
         loss_mse = self.mse_loss_fn(pred, target)
         loss_qmse = self.qmse_loss_fn(pred, target, bins)
         loss_psd = self.psd_loss_fn(pred, target)
         loss = loss_mse + self.alpha * loss_qmse + self.beta * loss_psd
-        return loss, loss_mse, loss_qmse, loss_psd
-
-
-
-    
+        return loss, [loss_mse, loss_qmse, loss_psd]

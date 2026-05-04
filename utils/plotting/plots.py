@@ -8,13 +8,15 @@ import matplotlib.ticker as ticker
 import matplotlib.colors as colors
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.collections import LineCollection
-os.environ["CARTOPY_DATA_DIR"] = "/leonardo_work/ICT26_ESP/vblasone/cartopy/"
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
 from matplotlib.ticker import ScalarFormatter, NullFormatter
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import matplotlib.tri as tri
+from utils.plotting.setup_cartopy import setup_cartopy
 
+# Set-up cartopy before imports
+setup_cartopy()
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 
 def draw_rectangle(x_min, x_max, y_min, y_max, color, ax, fill=False, fill_color=None, alpha=0.5):
     y_grid = [y_min, y_min, y_max, y_max, y_min]
@@ -140,7 +142,7 @@ def plot_maps(
 
 def plot_pdf(hist_list, bin_list, color_list=['black', 'darkorange'], label_list=["GRIPHO", "GNN4CD"], suptitle="PDF (I)",
             fig=None, ax=None, show_ticks=True, title="", tail_ylim=[10**-8, 10**-6], tail_lim=50, lg_fontsize=24, fontsize=24,
-            ylim=[10**(-10),5], xlim=[0.1,200], xlabel='precipitation [mm/h]', plot_func="scatter",
+            ylim=None, xlim=None, xlabel='precipitation [mm/h]', plot_func="scatter",
             tail_zoom=True, show_legend=True, legend_outside=False, log_xy=False):
 
     if fig is None and ax is None:
@@ -149,15 +151,15 @@ def plot_pdf(hist_list, bin_list, color_list=['black', 'darkorange'], label_list
     if tail_zoom:
         axi_tail = inset_axes(
             ax,
-            width="35%", height="35%",       # both dimensions *relative* to parent
-            loc='lower left',                # start in the lower‑left corner…
-            bbox_to_anchor=(0.15, 0.1, 1, 1), # …then shift downward by 33 % of ax height
-            bbox_transform=ax.transAxes,     # interpret the anchor in axes coords
-            borderpad=0                      # no extra padding
+            width="35%", height="35%",          # both dimensions *relative* to parent
+            loc='lower left',                   # start in the lower‑left corner…
+            bbox_to_anchor=(0.15, 0.1, 1, 1),   # …then shift downward by 33 % of ax height
+            bbox_transform=ax.transAxes,        # interpret the anchor in axes coords
+            borderpad=0                         # no extra padding
         )
 
         for i in range(len(bin_list)):
-            mask_tail = bin_list[i] >= tail_lim #results_RC["bin_edges_y_centre"] >= 50
+            mask_tail = bin_list[i] >= tail_lim
             axi_tail.scatter(bin_list[i][mask_tail],hist_list[i][mask_tail], color=color_list[i], s=50, label=label_list[i], zorder=2, alpha=0.4)
         if log_xy:
             axi_tail.set_yscale('log')

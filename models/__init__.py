@@ -1,2 +1,1 @@
-from build_model import build_model
-from GNN4CD_model import GNN4CD_model
+from .gnn4cd_model import GNN4CD_Model

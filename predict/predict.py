@@ -11,78 +11,30 @@ from accelerate import Accelerator
 
 from torch_geometric.data import HeteroData
 from torch_geometric.utils import degree
-from data.datasets import Graph_Dataset, custom_collate_fn_graph
+from data.datasets.graph_dataset import Graph_Dataset, custom_collate_fn_graph
 
-from utils.helpers import date_to_idxs_from_timeindex, set_seed_everything
-from utils.helpers import write_log, standardize_input, invert_normalization
-from utils.predictions import Predictor
-
-from models import build_model, update_parser_with_model_args
-from utils.extractors import extract_prediction
-from utils.predictand_transforms import inverse_transform_predictand
-from utils.predictor_transforms import transform_predictors
+from models.build_model import build_model
+from models.add_model_specific_args import add_model_specific_args
+from utils.helpers.tools import date_to_idxs_from_timeindex, set_seed_everything
+from utils.helpers.tools import write_log
+from utils.predictions.predictor import Predictor
+from utils.extractors.extract_prediction import extract_prediction
+from utils.predictand_transforms.inverse_transform_predictand import inverse_transform_predictand
+from utils.predictor_transforms.transform_predictors import transform_predictors
 from utils.losses.registry import LOSS_REGISTRY
+from predict.add_base_args import add_base_args
+from predict.add_target_specific_args import add_target_specific_args
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-#-- paths
-parser.add_argument('--input_path', type=str, help='path to input directory')
-parser.add_argument('--output_path', type=str, help='path to output directory')
-parser.add_argument('--log_file', type=str, default='log.txt', help='log file')
-
-parser.add_argument('--epoch', type=int)
-parser.add_argument('--train_path', type=str)
-parser.add_argument('--checkpoint', type=str, default=None)
-parser.add_argument('--output_file', type=str, default="G_predictions.pkl")
-
-parser.add_argument('--graph_file', type=str, default=None)
-parser.add_argument('--low_input_file', type=str, default=None)
-parser.add_argument('--target_file', type=str, default=None)
-parser.add_argument('--orog_file', type=str, default=None)
-parser.add_argument('--mask_sealand_file', type=str, default=None)
-parser.add_argument('--coords_ij_file', type=str, default=None)
-parser.add_argument('--model_name', type=str, default=None) 
-parser.add_argument('--history_length', type=str)
-parser.add_argument('--dataset_name', type=str, default=None) 
-parser.add_argument('--test_idxs_file', type=str, default="")
-parser.add_argument('--target_type', type=str, default="precipitation")
-parser.add_argument('--run_type', type=str)
-
-parser.add_argument('--metadata_file', type=str, help='metadata file')
-
-#-- start and end training dates
-parser.add_argument('--test_year_start', type=int)
-parser.add_argument('--test_month_start', type=int)
-parser.add_argument('--test_day_start', type=int)
-parser.add_argument('--test_year_end', type=int)
-parser.add_argument('--test_month_end', type=int)
-parser.add_argument('--test_day_end', type=int)
-parser.add_argument("--test_years", type=str, default="")
-
-parser.add_argument('--batch_size', type=int)
-parser.add_argument('--seed', type=int)
-
-parser.add_argument('--use_accelerate',  action='store_true')
-parser.add_argument('--no-use_accelerate', dest='use_accelerate', action='store_false')
-
-parser.add_argument('--make_plots',  action='store_true')
-parser.add_argument('--no-make_plots', dest='make_plots', action='store_false')
-
-
-### PARAMETERS THAT ARE NOW SET MANUALLY
-THRESHOLD = 0.0
-
-HISTORY_LENGTH_MAP = {
-    "1h": 24,   # [t-24,...,t]
-    "3h": 8,    # [t-24,t-21,...,t]
-    "6h": 4,    # [t-24,t-18,t-12,t-6,t]
-    "1d": 2,    # [t-2,t-1,t]
-}
-
-HIGH_INDEPENDENT_VARS = True
 
 if __name__ == '__main__':
 
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = add_base_args(parser)
+
+    args, unknown = parser.parse_known_args()
+
+    # Update args with target-specific arguments
+    parser = add_target_specific_args(parser, args.target_type)
     args = parser.parse_args()
     
     # Set all seeds
@@ -111,7 +63,7 @@ if __name__ == '__main__':
         low_high_graph = pickle.load(f)
 
     #-- 2. Low res input
-    x_low = np.load(args.input_path+args.x_low_file)
+    x_low = np.load(args.input_path+args.low_input_file)
 
     #-- 3. Target
     target = np.load(args.input_path+args.target_file)
@@ -140,27 +92,6 @@ if __name__ == '__main__':
     with open(args.input_path + args.metadata_file, "r") as f:
         metadata = json.load(f)
 
-#--------------------------------------------------------
-#----------------- DERIVED QUANTITIES -------------------
-#--------------------------------------------------------
-
-    # High resolution lon and lat
-    lon_high = low_high_graph["high"].lon
-    lat_high = low_high_graph["high"].lat
-
-    # Time resolution
-    time_res = metadata.get("time_res", None)
-
-    # Determine history length and seq_length based on time resolution
-    history_length = HISTORY_LENGTH_MAP.get(time_res) # lookup for the predictors
-    if history_length is None:
-        raise ValueError(f"Unknown time resolution: {time_res}")
-    
-    seq_length = history_length + 1 # total length of the sequence for the RNN model
-    
-    n_vars = x_low.shape[2]
-    n_levels = x_low.shape[3]
-
 #-----------------------------------------------------
 #---------------------- INDICES  ---------------------
 #-----------------------------------------------------
@@ -174,8 +105,8 @@ if __name__ == '__main__':
             year_end=args.test_year_end, month_end=args.test_month_end, day_end=args.test_day_end,
             time_index=time_index)
         
-        if test_start_idx - history_length >= 0:
-            test_idxs = np.arange(test_start_idx - history_length, test_end_idx)
+        if test_start_idx - args.history_length >= 0:
+            test_idxs = np.arange(test_start_idx - args.history_length, test_end_idx)
             test_idxs_valid = np.arange(test_start_idx, test_end_idx)
             test_idxs_valid_subset = np.where(np.isin(test_idxs, test_idxs_valid))[0]
         else:
@@ -193,11 +124,11 @@ if __name__ == '__main__':
                 year_end=year, month_end=12, day_end=31,
                 time_index=time_index
             )
-            if test_start_idx - history_length < 0:
-                test_start_idx = history_length
+            if test_start_idx - args.history_length < 0:
+                test_start_idx = args.history_length
                 write_log(f"\nFor year {year} test starts from {time_index[test_start_idx]}", args, accelerator, 'a')
             # indices of output
-            test_idxs_list.append(np.arange(test_start_idx - history_length, test_end_idx))
+            test_idxs_list.append(np.arange(test_start_idx - args.history_length, test_end_idx))
             # indices of input
             test_idxs_valid_list.append(np.arange(test_start_idx, test_end_idx))
         
@@ -216,14 +147,14 @@ if __name__ == '__main__':
     x_low_test = x_low[:, test_idxs, :, :] # num_nodes, time, vars, levels
     target_test = target[:, test_idxs][:, test_idxs_valid_subset]
 
-#--------------------------------------------------------
-#--------------------  PREPROCESSING --------------------
-#--------------------------------------------------------
+    #-----------------------------------------
+    #---------  TRANSFORM PREDICTORS ---------
+    #-----------------------------------------
 
-    #-- Stesp 1. Standardize input data
-    write_log(f"\nStandardizing input data.", args, accelerator, 'a')
+    # 1. Transform predictors
+    write_log(f"\nTransforming predictor data.", args, accelerator, 'a')
 
-    predictors_stats = args.train_path + "predictors_stats.npz"
+    predictors_stats = np.load(args.train_path + "predictors_stats.npz", allow_pickle=True)
     x_low_test_std, x_high_std = transform_predictors(
         x_low=x_low_test,
         x_high=orog,
@@ -233,8 +164,15 @@ if __name__ == '__main__':
         stats=predictors_stats,
         stats_save_path=None
     )
+
+    n_vars = x_low_test_std.shape[2]
+    n_levels = x_low_test_std.shape[3]
+
+    # 1.2 Flatten x_low_test_std
+    N, T = x_low_test_std.shape[:2] 
+    x_low_test_std = x_low_test_std.reshape(N, T, -1) # num_nodes, time, vars*levels
     
-    #-- Step 2. Add the other high-res features
+    # 1.3 Add high_res predictors which are not transformed
     if use_mask_sealand:
         x_high_std = np.concatenate((x_high_std, mask_sealand), axis=-1)
         write_log(f"\nAdding mask sea-land node features", args, accelerator, 'a')
@@ -243,52 +181,34 @@ if __name__ == '__main__':
         x_high_std = np.concatenate((x_high_std, coords_ij), axis=-1)
         write_log(f"\nAdding ij node features", args, accelerator, 'a')
 
-    #-- Step 3 - torch tensors from numpy arrays
-    test_idxs = torch.from_numpy(test_idxs).int()
-    x_low_test_std = torch.from_numpy(x_low_test_std).float()
-    x_high_std = torch.from_numpy(x_high_std).float()
-    target_test = torch.from_numpy(target_test).float()
-
-    x_low_test_std = torch.flatten(x_low_test_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
-
     n_static_high = x_high_std.shape[1]
 
     write_log(f"\nn_vars: {n_vars}, n_levels: {n_levels}, n_static_high: {n_static_high}", args, accelerator, 'a')
 
-
     #-----------------------------------------------------
-    #-------------- DATASET AND DATALOADER ---------------
-    #-----------------------------------------------------
-    
-    write_log(f"\nDefining dataset and dataloader.", args, accelerator, 'a')
-    graph_dataset_tmp = Graph_Dataset(
-        x_low=x_low_test_std,
-        high_input=x_high_std,
-        graph=low_high_graph,
-        target=None,
-        history_length=history_length,
-    )
-
-    graph_dataset = torch.utils.data.Subset(graph_dataset_tmp, test_idxs_valid_subset) # it's just a view of the original dataset
-
-    dataloader = torch.utils.data.DataLoader(
-        graph_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        collate_fn=custom_collate_fn_graph,
-        num_workers=0
-    )
-
-    #-----------------------------------------------------
-    #------------------------ MODEL ----------------------
+    #-------------- FROM NUMPY TO PYTORCH ----------------
     #-----------------------------------------------------
 
-    loss_class = LOSS_REGISTRY[args.loss_name]
-    output_dim = loss_class.output_dim
+    # Predictors
+    x_low_test_std = torch.from_numpy(x_low_test_std).float()
+    x_high_std = torch.from_numpy(x_high_std).float()
 
-    parser = update_parser_with_model_args(args.model_name)
+    # Predictand
+    target_test = torch.from_numpy(target_test).float()
+
+    # test_idxs = torch.from_numpy(test_idxs).int()
+
+    #--------------------------------------------
+    #-------------- BUILD MODEL -----------------
+    #--------------------------------------------
+
+    # Update args with loss- and model-specific arguments
+    parser = add_model_specific_args(parser, args.model_name)
     args = parser.parse_args()
 
+    LossClass = LOSS_REGISTRY[args.loss_name]
+    output_dim = LossClass.output_dim
+    
     model = build_model(
         x_low_var_dim=n_vars,
         x_low_lev_dim=n_levels,
@@ -296,7 +216,7 @@ if __name__ == '__main__':
         output_dim=output_dim,
         args=args
     )
-    
+
     #-----------------------------------------------------
     #------------------ LOAD CHECKPOINT ------------------
     #-----------------------------------------------------
@@ -316,6 +236,29 @@ if __name__ == '__main__':
     model.load_state_dict(checkpoint)
 
     #-----------------------------------------------------
+    #-------------- DATASET AND DATALOADER ---------------
+    #-----------------------------------------------------
+    
+    write_log(f"\nDefining dataset and dataloader.", args, accelerator, 'a')
+    graph_dataset_tmp = Graph_Dataset(
+        graph=low_high_graph,
+        low_input=x_low_test_std,
+        high_input=x_high_std,
+        target=None,
+        history_length=args.history_length,
+    )
+
+    graph_dataset = torch.utils.data.Subset(graph_dataset_tmp, test_idxs_valid_subset) # it's just a view of the original dataset
+
+    dataloader = torch.utils.data.DataLoader(
+        graph_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        collate_fn=custom_collate_fn_graph,
+        num_workers=0
+    )
+
+    #-----------------------------------------------------
     #---------------- ACCELERATOR PREPARE ----------------
     #-----------------------------------------------------
 
@@ -330,7 +273,8 @@ if __name__ == '__main__':
               f"{time_index_test[test_idxs_valid_subset.min()]} to idx {time_index_test[test_idxs_valid_subset.max()]}.", args, accelerator, 'a')
 
     start = time.time()
-    y_out_trans, idxs = Predictor.predict(model, dataloader, args=args, accelerator=accelerator)
+    predictor = Predictor()
+    y_out_trans, idxs = predictor.predict(model, dataloader, args=args, accelerator=accelerator)
     end = time.time()
 
     write_log(f"\nTest Done! \nNow post-processing results.", args, accelerator, 'a')
@@ -339,7 +283,7 @@ if __name__ == '__main__':
     #------------------ POST-PROCESSING ------------------
     #-----------------------------------------------------
 
-    y_pred_trans = extract_prediction(y_out_trans, loss_fn=args.loss_fn)
+    y_pred_trans = extract_prediction(y_out_trans, loss_name=args.loss_name)
 
     # from raw model prediction to actual pr/tasmax values
     predictand_stats = np.load(args.train_path + "predictand_stats.npz", allow_pickle=True)
@@ -360,7 +304,7 @@ if __name__ == '__main__':
         print(f"[Rank {accelerator.process_index}] y_pred.shape (after gather): {y_pred.shape}")
 
     if args.target_type == "precipitation":
-        y_pred[y_pred<THRESHOLD] = 0.0
+        y_pred[y_pred < args.threshold] = 0.0
 
     # LON LAT
     lat_low = low_high_graph["low"].lat.cpu().numpy()

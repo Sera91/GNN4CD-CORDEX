@@ -9,92 +9,45 @@ import json
 import random
 from accelerate import Accelerator
 
+# Models
+from models.build_model import build_model
+from models.add_model_specific_args import add_model_specific_args
+from models.registry import MODEL_REGISTRY
+
+# Losses
+from utils.losses.registry import LOSS_REGISTRY
+from utils.losses.build_loss import build_loss
+from utils.losses.add_loss_specific_args import add_loss_specific_args
 from utils.losses.qmse import derive_qmse_bins
-from utils.helpers import write_log, inspect_model, set_seed_everything
-from utils.helpers import find_not_all_nan_times, derive_train_val_idxs, derive_train_val_idxs_years_list
-from utils.helpers import prepare_target_for_train
-from utils.training import Trainer
-from data.datasets import Graph_Dataset, custom_collate_fn_graph
-from utils.predictand_transforms import transform_predictand
-from utils.predictor_transforms import transform_predictors
-from models import MODEL_REGISTRY, build_model, update_parser_with_model_args
-from utils.losses import LOSS_REGISTRY, build_loss, update_parser_with_loss_args
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+# Helpers
+from utils.helpers.tools import (
+    write_log,
+    inspect_model,
+    set_seed_everything,
+    find_not_all_nan_times,
+    derive_train_val_idxs,
+    derive_train_val_idxs_years_list,
+)
 
-#-- paths
-parser.add_argument('--input_path', type=str, help='path to input directory')
-parser.add_argument('--output_path', type=str, help='path to output directory')
-parser.add_argument('--log_file', type=str, default='log.txt', help='log file')
+# Training
+from utils.training.trainer import Trainer
+from train.add_base_args import add_base_args
 
-parser.add_argument('--low_input_file', type=str, default=None)
-parser.add_argument('--orog_file', type=str, default=None)
-parser.add_argument('--mask_sealand_file', type=str, default=None)
-parser.add_argument('--target_file', type=str, default=None)
-parser.add_argument('--graph_file', type=str, default=None) 
-parser.add_argument('--coords_ij_file', type=str, default=None)
+# Data
+from data.datasets.graph_dataset import Graph_Dataset, custom_collate_fn_graph
 
-parser.add_argument('--use_accelerate',  action='store_true')
-parser.add_argument('--no-use_accelerate', dest='use_accelerate', action='store_false')
-parser.add_argument('--wandb_project_name', type=str)
+# Transforms
+from utils.predictand_transforms.transform_predictand import transform_predictand
+from utils.predictor_transforms.transform_predictors import transform_predictors
 
-parser.add_argument('--metadata_file', type=str, help='metadata file')
-
-#-- training hyperparameters
-parser.add_argument('--epochs', type=int, default=15, help='number of total training epochs')
-parser.add_argument('--batch_size', type=int, default=64, help='batch size (global)')
-parser.add_argument('--step_size', type=int, default=10, help='scheduler step size (global)')
-parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
-parser.add_argument('--weight_decay', type=float, default=0.0, help='weight decay (wd)')
-parser.add_argument('--load_checkpoint',  action='store_true')
-parser.add_argument('--no-load_checkpoint', dest='load_checkpoint', action='store_false')
-parser.add_argument('--lr_scheduler', type=str, default="StepLR")
-
-parser.add_argument('--checkpoint_ctd', type=str, help='checkpoint to load to continue')
-parser.add_argument('--ctd_training',  action='store_true')
-parser.add_argument('--no-ctd_training', dest='ctd_training', action='store_false')
-parser.add_argument('--make_val_plots', action='store_true')
-parser.add_argument('--no-make_val_plots', dest='make_val_plots', action='store_false')
-parser.add_argument('--val_plot_frequency', type=int)
-parser.add_argument('--val_plot_config', type=str)
-
-parser.add_argument('--loss_fn', type=str)
-parser.add_argument('--seed', type=int, default=100)
-parser.add_argument('--n_gpu', type=int, default=4)
-
-parser.add_argument('--model_name', type=str)
-parser.add_argument('--history_length', type=str)
-
-parser.add_argument('--predictand_transform_mode', type=str)
-parser.add_argument('--predictor_low_tranform_mode', type=str)
-parser.add_argument('--predictor_high_tranform_mode', type=str)
-
-parser.add_argument('--dataset_name', type=str, default='graph_dataset')
-parser.add_argument('--collate_name', type=str)
-parser.add_argument('--target_type', type=str)
-
-#-- start and end training dates
-parser.add_argument('--train_year_start', type=str, default="")
-parser.add_argument('--train_month_start', type=str, default="")
-parser.add_argument('--train_day_start', type=str, default="")
-parser.add_argument('--train_year_end', type=str, default="")
-parser.add_argument('--train_month_end', type=str, default="")
-parser.add_argument('--train_day_end', type=str, default="")
-parser.add_argument('--validation_year', type=str, default="")
-# for random validation years
-parser.add_argument('--first_year', type=str, default="")
-parser.add_argument('--last_year', type=str, default="")
-parser.add_argument('--n_val_years', type=str, default="")
-# for lists of training and validation years
-parser.add_argument('--train_years', type=str, default="")
-parser.add_argument('--val_years', type=str, default="")
-
-parser.add_argument('--WANDB_API_KEY', type=str)
-parser.add_argument('--WANDB_USERNAME', type=str)
 
 if __name__ == '__main__':
 
-    args = parser.parse_args()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = add_base_args(parser)
+
+    args, unknown = parser.parse_known_args()
 
     # Set all seeds
     set_seed_everything(seed=args.seed)
@@ -169,7 +122,12 @@ if __name__ == '__main__':
 #--------------------------------------------------------
 
     #-- Step 1 - Find valid time indices
-    idxs_not_all_nan = find_not_all_nan_times(target, L=args.history_length)
+    idxs_not_all_nan = find_not_all_nan_times(
+        data=target,
+        L=args.history_length,
+        args=args,
+        accelerator=accelerator
+        )
 
     #-- Step 2 - Compute train/val indices
     # Case 1: the user provides lists of train years and val years
@@ -226,7 +184,7 @@ if __name__ == '__main__':
         x_low,
         x_high=orog,
         train_idxs=train_idxs,
-        mode_low=args.predictor_low_tranform_mode,      # e.g. "zscore_lowres_var"
+        mode_low=args.predictor_low_transform_mode,      # e.g. "zscore_lowres_var"
         mode_high=args.predictor_high_transform_mode,    # e.g. "zscore_highres_grouped"
         stats=None,
         stats_save_path=args.output_path + "predictors_stats.npz"
@@ -236,7 +194,8 @@ if __name__ == '__main__':
     n_levels = x_low_std.shape[3]
 
     # 1.2 Flatten x_low_std
-    x_low_std = torch.flatten(x_low_std, start_dim=2, end_dim=-1)   # num_nodes, time, vars*levels
+    N, T = x_low_std.shape[:2] 
+    x_low_std = x_low_std.reshape(N, T, -1) # num_nodes, time, vars*levels
 
     # 1.3 Add high_res predictors which are not transformed
     if use_mask_sealand:
@@ -258,30 +217,22 @@ if __name__ == '__main__':
         target_trans = transform_predictand(
             target,
             mode=args.predictand_transform_mode,      # e.g. "log1p", "z_score", "minmax"
+            train_idxs=train_idxs,
             stats_save_path=args.output_path + "predictand_stats.npz"
         )
     
-    #-----------------------------------------------------
-    #-------------- BUILD LOSS and MODEL -----------------
-    #-----------------------------------------------------
+    #-------------------------------------------
+    #-------------- BUILD LOSS -----------------
+    #-------------------------------------------
 
-    # Update args with loss- and model-specific arguments
-    parser = update_parser_with_loss_args(args.loss_name)
-    parser = update_parser_with_model_args(args.model_name)
+    # Update args with loss-specific arguments
+    parser = add_loss_specific_args(parser, args.loss_name)
     args = parser.parse_args()
 
-    loss, output_dim = build_loss(args)
-    
-    model = build_model(
-        x_low_var_dim=n_vars,
-        x_low_lev_dim=n_levels,
-        x_high_dim=n_static_high,
-        output_dim=output_dim,
-        args=args
-    )
+    loss_fn, output_dim = build_loss(args)
 
     # Eventually compute QMSE bins
-    if args.loss_name == "MSE_QMSE_PSD_Loss":
+    if getattr(loss_fn, "use_bins", False):
         if args.binscale == "log":
             binmin = np.log1p(args.binmin)
             binmax = np.log1p(args.binmax)
@@ -311,7 +262,7 @@ if __name__ == '__main__':
     target_trans_train = target_trans[:, train_idxs]
     target_trans_val = target_trans[:, val_idxs]
 
-    if args.loss_name == "MSE_QMSE_PSD_Loss":
+    if getattr(loss_fn, "use_bins", False):
         target_bins_train = target_bins[:, train_idxs]
         target_bins_val = target_bins[:, val_idxs]
 
@@ -328,9 +279,25 @@ if __name__ == '__main__':
     target_trans_train = torch.from_numpy(target_trans_train).float()
     target_trans_val = torch.from_numpy(target_trans_val).float()
 
-    if args.loss_name == "MSE_QMSE_PSD_Loss":
+    if getattr(loss_fn, "use_bins", False):
         target_bins_train = torch.from_numpy(target_bins_train).int()
         target_bins_val = torch.from_numpy(target_bins_val).int()
+
+    #--------------------------------------------
+    #-------------- BUILD MODEL -----------------
+    #--------------------------------------------
+
+    # Update args with model-specific arguments
+    parser = add_model_specific_args(parser, args.model_name)
+    args = parser.parse_args()
+    
+    model = build_model(
+        x_low_var_dim=n_vars,
+        x_low_lev_dim=n_levels,
+        x_high_dim=n_static_high,
+        output_dim=output_dim,
+        args=args
+    )
 
     #-----------------------------------------------------
     #-------------- DATASET AND DATALOADER ---------------
@@ -354,7 +321,7 @@ if __name__ == '__main__':
             args.history_length,
         )
 
-    if args.loss_name == "MSE_QMSE_PSD_Loss":
+    if getattr(loss_fn, "use_bins", False):
         graph_dataset_train_tmp.set_additional_features(w=target_bins_train)
         graph_dataset_val_tmp.set_additional_features(w=target_bins_val)
 
@@ -408,8 +375,8 @@ if __name__ == '__main__':
     epoch_start=0
     
     if accelerator is not None:
-        model, optimizer, dataloader_train, lr_scheduler, loss = accelerator.prepare(
-            model, optimizer, dataloader_train, lr_scheduler, loss)
+        model, optimizer, dataloader_train, lr_scheduler, loss_fn = accelerator.prepare(
+            model, optimizer, dataloader_train, lr_scheduler, loss_fn)
         dataloader_val = accelerator.prepare(dataloader_val)
         write_log("\nUsing accelerator to prepare model, optimizer, dataloader and loss...", args, accelerator, 'a')
     else:
@@ -432,7 +399,7 @@ if __name__ == '__main__':
 
     write_log(f"\nUsing lr={optimizer.param_groups[0]['lr']:.8f}, " +
                 f"weight decay = {args.weight_decay} and epochs={args.epochs}." + 
-                f"\nloss: {loss}", args, accelerator, 'a') 
+                f"\nloss: {loss_fn}", args, accelerator, 'a') 
     
     effective_batch_size = args.batch_size if accelerator is None else args.batch_size*torch.cuda.device_count()
     write_log(f"\nModel = {args.model_name}, batch size = {effective_batch_size}", args, accelerator, 'a')
@@ -441,18 +408,21 @@ if __name__ == '__main__':
 
     start = time.time()    
 
-    Trainer.train(
-        model,
-        dataloader_train,
-        dataloader_val,
-        optimizer,
-        loss,
-        lr_scheduler,
-        val_size,
-        time_index[val_idxs][val_idxs_valid_subset],
-        accelerator,
-        args,
-        epoch_start=epoch_start)
+    trainer = Trainer()
+
+    trainer.train(
+        model=model,
+        dataloader_train=dataloader_train,
+        dataloader_val=dataloader_val,
+        optimizer=optimizer,
+        loss_fn=loss_fn,
+        lr_scheduler=lr_scheduler,
+        val_size=val_size,
+        times=time_index[val_idxs][val_idxs_valid_subset],
+        accelerator=accelerator,
+        args=args,
+        epoch_start=0
+    )
 
     end = time.time()
 

@@ -1,16 +1,28 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from utils.helpers import write_log
+from utils.helpers.tools import write_log
 
 
+@register_loss("QMSE_Loss")
 class QMSELoss(nn.Module):
+
+    @staticmethod
+    def add_loss_specific_args(parser):
+        parser.add_argument("--alpha", type=float)
+        parser.add_argument("--beta", type=float)
+        parser.add_argument('--binmin', type=float)
+        parser.add_argument('--binmax', type=float)
+        parser.add_argument('--binwidth', type=float)
+        parser.add_argument('--binscale', type=str)
+        return parser
+
     def __init__(self, balance=None):
         super().__init__()
         self.balance = balance
         self.mse_loss = nn.MSELoss()
 
-    def __call__(self, prediction_batch, target_batch, bins):
+    def forward(self, prediction_batch, target_batch, bins):
         loss_quantized = 0
         bins = bins.int()
         bins_unique = torch.unique(bins)
@@ -36,8 +48,6 @@ def derive_qmse_bins(target, train_idxs, args, accelerator, binmin=np.log1p(0.1)
     # Precompute bins
     if bins is None:
         bins = np.arange(binmin, binmax, binwidth)
-        if args.model_type == "all":
-            bins = np.insert(bins, 0, 0.0)  # log1p(0)
 
     # Histogram only on training subset (flatten for speed)
     train_vals = target[:, train_idxs].ravel()

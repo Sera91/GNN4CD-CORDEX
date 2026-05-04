@@ -3,7 +3,14 @@ from utils.helpers.tools import write_log
 from data.loaders.netcdf_loader import read_dataset
 
 
-def load_dataset_CORDEXML(params, levels, file_path, file, args):
+def load_dataset_CORDEXML(
+    file_path,
+    file,
+    args,
+    params=['q', 't', 'u', 'v', 'z'],
+    levels=['850', '700', '500']
+    ):
+    
     n_params = len(params)
     n_levels = len(levels)
 

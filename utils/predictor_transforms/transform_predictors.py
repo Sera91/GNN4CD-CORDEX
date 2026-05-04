@@ -14,7 +14,11 @@ def transform_predictors(
 
     if stats is not None:
         mode_low = stats["mode_low"]
+        if isinstance(mode_low, np.ndarray):
+            mode_low = mode_low.item()
         mode_high = stats["mode_high"]
+        if isinstance(mode_high, np.ndarray):
+            mode_high = mode_high.item()
 
     # --- LOW-RES ---
     x_low_std, stats_low = PREDICTOR_TRANSFORM_REGISTRY[mode_low](

@@ -2,12 +2,9 @@ import torch
 from torch.utils.data import Dataset
 from torch_geometric.data import HeteroData, Batch
 from torch.utils.data import Sampler
-
-import torch
 from typing import Sequence, Union
 from torch_geometric.utils import degree
 import copy
-
 import torch_geometric.transforms as T
 transform = T.AddLaplacianEigenvectorPE(k=2)
 

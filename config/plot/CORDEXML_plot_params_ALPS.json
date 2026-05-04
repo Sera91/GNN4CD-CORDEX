@@ -15,7 +15,10 @@
         "tail_lim": 10,
         "cmap": "cmap_dict['avg']['cmap']",
         "tail_zoom": "True",
-        "xlim_pdf": "None",
+        "binmin": 0,
+        "binmax": 350,
+        "binwidth": 1,
+        "xlim_pdf": "[0.2, 350]",
         "plot_func_pdf": "scatter",
         "legend_outside": "False"
     },
@@ -35,6 +38,9 @@
         "tail_lim": "None",
         "cmap": "plasma",
         "tail_zoom": "False",
+        "binmin": 230,
+        "binmax": 320,
+        "binwidth": 1,
         "xlim_pdf": "[230,320]",
         "plot_func_pdf": "step",
         "legend_outside": "True"

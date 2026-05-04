@@ -157,7 +157,7 @@ def date_to_idxs_from_timeindex(
     return start_idx
 
 
-def find_not_all_nan_times(data, L=24, args=None):
+def find_not_all_nan_times(data, L=24, args=None, accelerator=None):
     """Define a temporal mask, 1 if at least one spatial value is not nan.
 
     Parameters
@@ -176,7 +176,7 @@ def find_not_all_nan_times(data, L=24, args=None):
     mask_not_all_nan = []
 
     for t in range(initial_time_dim):
-        nan_sum = np.isnan(target[:, t]).sum()
+        nan_sum = np.isnan(data[:, t]).sum()
         mask_not_all_nan.append(nan_sum < data.shape[0])
 
     mask_not_all_nan = np.array(mask_not_all_nan, dtype=bool)
@@ -541,3 +541,11 @@ def convert_dict(d):
         else:
             out[k] = try_eval(v)
     return out
+
+def get_backend(x):
+    if isinstance(x, torch.Tensor):
+        return torch
+    elif isinstance(x, np.ndarray):
+        return np
+    else:
+        raise TypeError(f"Unsupported type for predictor transform: {type(x)}")

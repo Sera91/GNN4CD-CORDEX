@@ -13,7 +13,7 @@ MAIL=""
 LOG_PATH=""
 N_GPU="1"
 SEED=100
-MODEL_NAME="GNN4CD_model"
+MODEL_NAME="GNN4CD_Model"
 TARGET_TYPE="precipitation"
 LR_SCHEDULER="StepLR"
 
@@ -89,12 +89,11 @@ USE_ACCELERATE=true
 #------------------#
 MAKE_VAL_PLOTS=true
 VAL_PLOT_FREQUENCY=1
-VAL_PLOT_CONFIG="/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_plot_params.json"
+VAL_PLOT_CONFIG="${MAIN_PATH}/config/plot/CORDEXML_plot_params_${DOMAIN}.json"
 
 #-----------------#
 # TRAINING PERIOD #
 #-----------------#
-
 TRAIN_YEAR_START=1961
 TRAIN_MONTH_START=1
 TRAIN_DAY_START=3
@@ -102,7 +101,6 @@ TRAIN_YEAR_END=1979
 TRAIN_MONTH_END=12
 TRAIN_DAY_END=29
 VALIDATION_YEAR=1980
-
 
 #--------------do not change here below------------------
 

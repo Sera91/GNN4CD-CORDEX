@@ -31,10 +31,10 @@ warnings.filterwarnings('ignore')
 import pickle
 import xarray as xr
 import json
+from utils.plotting.setup_cartopy import setup_cartopy
 
-sys.path.append("/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/GNN4CD-CORDEXML")
-os.environ["CARTOPY_DATA_DIR"] = "/leonardo_work/ICT26_ESP/sdigioia/CORDEX-ML/cartopy/"
-
+# Set-up cartopy before imports
+setup_cartopy()
 try:
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -58,6 +58,7 @@ parser.add_argument('--val_mode', type=str, default="")
 parser.add_argument('--report_name', type=str, default="")
 parser.add_argument('--test_id', type=str, default="")
 parser.add_argument('--test_year', type=str, default="")
+parser.add_argument('--config_file', type=str)
 
 # ==================== Utility Functions ====================
 
@@ -431,6 +432,7 @@ if __name__ == '__main__':
     DOMAIN = args.domain
     EXPERIMENT = args.experiment
     VAR = args.var                  # 'pr' or 'tasmax'
+    CONFIG_FILE = args.config_file
 
     input_path  = args.input_path
     plot_path = args.plot_path
@@ -447,7 +449,7 @@ if __name__ == '__main__':
     sys.stdout = log
 
     # Load plot configuration
-    with open(f"/leonardo_work/ICT26_ESP/vblasone/GNN4CD-CORDEXML/utils/CORDEXML_test_report_{DOMAIN}.json", "r") as f:
+    with open(CONFIG_FILE, "r") as f:
         CONFIG = json.load(f)
 
     MODEL_NAME = CONFIG["model"]["name"]

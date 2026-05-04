@@ -3,7 +3,7 @@ import torch.nn as nn
 from .registry import register_loss
 
 
-@register_loss("BernoulliGammaNLLLoss")
+@register_loss("Bernoulli_Gamma_NLL_Loss")
 class BernoulliGammaNLLLoss(nn.Module):
     output_dim = 3 # class attribute
 

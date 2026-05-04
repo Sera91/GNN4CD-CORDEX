@@ -1,8 +1,8 @@
 import torch
 
-class Tester(object):
+class Predictor(object):
 
-    def test(self, model, dataloader, args, accelerator=None):
+    def predict(self, model, dataloader, args, accelerator=None):
         model.eval()
         step = 0
 

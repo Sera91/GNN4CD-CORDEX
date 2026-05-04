@@ -7,12 +7,11 @@ import matplotlib.pyplot as plt
 from torch_geometric.data import HeteroData
 import json
 
-from utils.metrics import AverageMeter
-from utils.helpers import write_log
-from utils.plotting import create_validation_plots
-from utils.extractors import extract_prediction
-from utils.helpers import convert_dict
-from utils.predictand_transforms import inverse_transform_predictand
+from utils.metrics.average_meter import AverageMeter
+from utils.helpers.tools import write_log, convert_dict
+from utils.plotting.validation import create_validation_plots
+from utils.extractors.extract_prediction import extract_prediction
+from utils.predictand_transforms.inverse_transform_predictand import inverse_transform_predictand
 
 #-----------------------------------------------------
 #---------------------- TRAIN ------------------------
@@ -21,7 +20,7 @@ from utils.predictand_transforms import inverse_transform_predictand
 class Trainer(object):
 
     def __init__(self):
-        super(Trainer, self).__init__()
+        super().__init__()
 
     def train(
             self,
@@ -35,8 +34,7 @@ class Trainer(object):
             times,
             accelerator,
             args,
-            epoch_start=0,
-            log_val_plots=True):
+            epoch_start=0):
         
         write_log(f"\nStart training the regressor.", args, accelerator, 'a')
 
@@ -51,6 +49,13 @@ class Trainer(object):
             loss_meter = AverageMeter()
             val_loss_meter = AverageMeter()
 
+            if getattr(loss_fn, "components", False):
+                loss_meter_components = {}
+                val_loss_meter_components = {}
+                for i, component in enumerate(loss_fn.components):
+                    loss_meter_components[component] = AverageMeter()
+                    val_loss_meter_components[component] = AverageMeter()
+
             start = time.time()
             
             # TRAIN
@@ -61,7 +66,12 @@ class Trainer(object):
                 y_trans = graph["high"].y
 
                 y_out_trans = model(graph)
-                loss = loss_fn(y_out_trans, y_trans) # the loss internally handles the different y_out cases
+
+                if getattr(loss_fn, "use_bins", False):
+                    bins = graph['high'].w
+                    loss, loss_components = loss_fn(y_out_trans, y_trans, bins)
+                else:
+                    loss, loss_components = loss_fn(y_out_trans, y_trans)  # the loss internally handles the different y_out cases
                 
                 optimizer.zero_grad()
                 accelerator.backward(loss)
@@ -71,6 +81,10 @@ class Trainer(object):
                 
                 # Log values to wandb
                 loss_meter.update(val=loss.item(), n=y_trans.shape[0])
+
+                if getattr(loss_fn, "components", False):
+                    for i, component in enumerate(loss_fn.components):
+                        loss_meter_components[component].update(val=loss_components[i].item(), n=y_trans.shape[0])
                 
                 accelerator.log({
                     'epoch':epoch,
@@ -85,6 +99,13 @@ class Trainer(object):
                 'train loss avg': loss_meter.avg,
                 'lr': np.mean(lr_scheduler.get_last_lr())
             }, step=step)
+
+            if getattr(loss_fn, "components", False):
+                for i, component in enumerate(loss_fn.components):
+                    accelerator.log({
+                        'epoch':epoch,
+                        f'train loss {component}': loss_meter_components[component].avg,
+                    }, step=step)
 
             write_log(
                 f"\nEpoch {epoch} completed in {end - start:.4f} seconds." +
@@ -112,9 +133,18 @@ class Trainer(object):
                         y_trans = graph["high"].y
 
                         y_out_trans = model(graph)
-                        loss = loss_fn(y_out_trans, y_trans)
+                        
+                        if getattr(loss_fn, "use_bins", False):
+                            weights = graph['high'].w
+                            loss, loss_components = loss_fn(y_out_trans, y_trans, weights)
+                        else:
+                            loss, loss_components = loss_fn(y_out_trans, y_trans)  # the loss internally handles the different y_out cases
 
                         val_loss_meter.update(val=loss.item(), n=y_trans.shape[0])
+                        if getattr(loss_fn, "components", False):
+                            for i, component in enumerate(loss_fn.components):
+                                val_loss_meter_components[component].update(val=loss_components[i].item(), n=y_trans.shape[0])
+
                         accelerator.log({
                             'epoch':epoch,
                             'val loss iteration': val_loss_meter.val,
@@ -122,12 +152,14 @@ class Trainer(object):
                         }, step=step)
                         
                         if args.make_val_plots:
-                            y_pred_trans = extract_prediction(y_out_trans, args.loss_fn)
+                            y_pred_trans = extract_prediction(y_out_trans, args.loss_name)
                             stats = np.load(args.output_path+"predictand_stats.npz", allow_pickle=True)
+                            
+                            # Get the actual precipitation/temperature prediction
                             y = inverse_transform_predictand(y_trans, stats)
                             y_pred = inverse_transform_predictand(y_pred_trans, stats)
 
-                            # retrieve graphs for individual time instances
+                            # Retrieve graphs for individual time instances
                             n_nodes = graph["high"].num_nodes
                             B = y.shape[0] // n_nodes
                             y = y.view(B, n_nodes)
@@ -137,35 +169,48 @@ class Trainer(object):
                             y_pred = torch.atleast_2d(y_pred) # from (N,) to (1,N)
                             y = torch.atleast_2d(y)
                             idxs = torch.atleast_2d(torch.tensor(graph.idxs, device=accelerator.device))
-                            y_pred_list.append(y_pred) # time, nodes
+
+                            y_pred_list.append(y_pred) # (time, nodes)
                             y_list.append(y)
                             idxs_list.append(idxs)     
 
                     ###### PLOTS ######
                     if args.make_val_plots:
-                        y_pred_all = accelerator.gather(torch.stack(y_pred_list)).swapaxes(0,1)[:,:val_size] # (nodes, time) (449152, 48, 32)
-                        y_all = accelerator.gather(torch.stack(y_list)).swapaxes(0,1)[:,:val_size]
+
+                        # Gather from GPUs and remove duplicated values due to gather
+                        y_pred_all = accelerator.gather(torch.stack(y_pred_list)).squeeze()[:val_size, :] # (time, nodes)
+                        y_all = accelerator.gather(torch.stack(y_list)).squeeze()[:val_size, :]
                         idxs_all = accelerator.gather(torch.stack(idxs_list)).squeeze()[:val_size]
 
-                        metadata_file_path=args.val_plot_config
+                        # Squeeze, swapaxes and , convert to cpu and numpy
+                        y_pred_all = y_pred_all.swapaxes(0,1).cpu().numpy() # (nodes, time)
+                        y_all = y_all.swapaxes(0,1).cpu().numpy()
+
+                        # Indices to ensure data are sorted correctly
+                        _, indices = torch.sort(idxs_all)
+                        indices = indices.cpu().numpy()
+
+                        y_pred_all = y_pred_all[:, indices]
+                        y_all = y_all[:, indices]
+                        times = times[indices]
+
+                        print(f"y_pred_all.shape: {y_pred_all.shape}, y_all.shape: {y_all.shape}, indices.shape: {indices.shape}")
+
+                        # Load validation plots metadata
+                        metadata_file_path = args.val_plot_config
                         with open(metadata_file_path) as f:
                             meta = json.load(f)
 
+                        # Arguments for the plot function                        
                         meta = convert_dict(meta)
                         target_type = args.target_type
-                        
                         lon = graph['high'].lon.cpu().numpy()
                         lat = graph['high'].lat.cpu().numpy()
 
-                        # convert to cpu and numpy
-                        _, indices = torch.sort(idxs_all)
-                        indices = indices.cpu().numpy()
-                        times = times[indices]
-
                         # Create a few plots to compare
                         fig_avg, fig_bias, fig_pdf = create_validation_plots(
-                            y_pred_all[indices], # to ensure they are sorted correctly
-                            y_all[indices],
+                            y_pred_all, 
+                            y_all,
                             lon,
                             lat,
                             args.target_type,
@@ -203,6 +248,14 @@ class Trainer(object):
                     'epoch':epoch,
                     'val loss avg': val_loss_meter.avg,
                 }, step=step)
+
+
+                if getattr(loss_fn, "components", False):
+                    for i, component in enumerate(loss_fn.components):
+                        accelerator.log({
+                            'epoch':epoch,
+                            f'train loss {component}': val_loss_meter_components[component].avg,
+                        }, step=step)
                     
             if lr_scheduler is not None:
                 lr_scheduler.step()  

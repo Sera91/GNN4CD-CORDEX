@@ -24,17 +24,17 @@ test_id_list = [cfg[f'TEST_ID_{ii+1}'] for ii in range(NUM_TESTS)]
 target_type = cfg['TARGET_TYPE']
 experiment = cfg['EXPERIMENT']
 accelerate_config = cfg['ACCELERATE_CONFIG_PATH']
-stats_mode = cfg['STATS_MODE']
 epoch = cfg['EPOCH']
 checkpoint = f"checkpoints/checkpoint_{epoch}"
 model_name = cfg['MODEL_NAME']
-model_type = cfg['MODEL_TYPE']
-RUN_TYPE = cfg['RUN_TYPE']
 graph_file = cfg['LOW_GRAPH_FILE']
 train_path = cfg['TRAIN_PATH']
 input_path = cfg['INPUT_PATH']
 plot_path = cfg['PLOT_PATH']
 dataset_name = cfg['DATASET_NAME']
+loss_name = cfg['LOSS_NAME']
+history_length = cfg['HISTORY_LENGTH']
+threshold = cfg['THRESHOLD']
 OROG_FILE = cfg["OROG_FILE"]
 MASK_SEALAND_FILE = cfg["MASK_SEALAND_FILE"]
 COORDS_IJ_FILE = cfg["COORDS_IJ_FILE"]
@@ -45,19 +45,19 @@ write_slurm = cfg["write_slurm"]
 run_slurm = cfg["run_slurm"]
 run_report = cfg["run_report"]
 
-os.makedirs(f"slurm_predictions/{experiment}/{VAR}", exist_ok=True)
+os.makedirs(f"{cfg['slurm_configs_folder']}/{experiment}/{VAR}", exist_ok=True)
 
 for ii in range(len(input_list)):
 
     # 1. WRITE PREDICTION SLURM FILE
-    slurm_file = f"slurm_predictions/{experiment}/{VAR}/run_prediction_{VAR}_{DOMAIN}_test_{ii}_{experiment}.slurm"
+    slurm_file = f"{cfg['slurm_configs_folder']}/{experiment}/{VAR}/run_prediction_{VAR}_{DOMAIN}_test_{ii}_{experiment}.slurm"
 
     slurm_txt = f"""#!/bin/bash
 mkdir -p {outputP_list[ii]}logs/
 sbatch << EOT
 #!/bin/bash
-#SBATCH -A ict26_esp_0
-#SBATCH -p boost_usr_prod
+#SBATCH -A {cfg['ACCOUNT']}
+#SBATCH -p {cfg['PARTITION']}
 #SBATCH --time {cfg['TIME']}
 #SBATCH -N 1
 #SBATCH --mem={cfg['MEM']}
@@ -77,8 +77,9 @@ module load cuda/11.8
 source {cfg['SOURCE_PATH']}
 conda activate {cfg['ENV_PATH']}
 cd {cfg['MAIN_PATH']}
+export PYTHONPATH=$(pwd):$PYTHONPATH
 
-python -m accelerate.commands.launch --config_file "{accelerate_config}" test.py \
+python accelerate.commands.launch --config_file "{accelerate_config}" -m predict.predict_test \
     --dataset_name="{dataset_name}" \
     --predictors_filename="{pred_list[ii]}" \
     --input_path_P="{input_list[ii]}" \
@@ -93,16 +94,17 @@ python -m accelerate.commands.launch --config_file "{accelerate_config}" test.py
     --log_file="logs/{log_list[ii]}" \
     --graph_file="{graph_file}" \
     --batch_size=1 \
-    --stats_mode={stats_mode} \
     --target_type={target_type} \
     --model_name="{model_name}" \
-    --model_type="{model_type}" \
     --checkpoint="{checkpoint}" \
     --mask_sealand_file="{MASK_SEALAND_FILE}" \
     --orog_file="{OROG_FILE}" \
     --coords_ij_file="{COORDS_IJ_FILE}" \
     --metadata_file="{METADATA_FILE}" \
-    --run_type="{RUN_TYPE}" \
+    --loss_name="{loss_name}" \
+    --epoch="{epoch}" \
+    --history_length="{history_length}" \
+    --threshold="{threshold}" \
     "{USE_ACCELERATE}"
 EOT
 """
@@ -123,7 +125,7 @@ EOT
 
         os.makedirs(plot_path+"logs/", exist_ok=True)
         report_name = f"Test_{ii+1}_{val_mode_list[ii]}_{VAR}"
-        report_slurm = f"slurm_predictions/{experiment}/{VAR}/run_report_test_{ii+1}_{val_mode_list[ii]}.slurm"
+        report_slurm = f"{cfg['slurm_configs_folder']}/{experiment}/{VAR}/run_report_test_{ii+1}_{val_mode_list[ii]}.slurm"
 
         report_txt = f"""#!/bin/bash
 #SBATCH -A ict26_esp_0
@@ -138,8 +140,9 @@ EOT
 source {cfg['SOURCE_PATH']}
 conda activate {cfg['ENV_PATH']}
 cd {cfg['MAIN_PATH']}
+export CARTOPY_DATA_DIR={cfg['CARTOPY_DATA_DIR']}
 
-python ./utils/plotting/plot_report_test.py \
+python -m utils.plotting.plot_report_test \
     --input_path="{outputP_list[ii]}" \
     --plot_path="{plot_path}" \
     --val_file="{outputF_list[ii]}" \
@@ -149,7 +152,8 @@ python ./utils/plotting/plot_report_test.py \
     --val_mode="{val_mode_list[ii]}" \
     --report_name="{report_name}" \
     --test_id="{test_id_list[ii]}" \
-    --domain="{DOMAIN}"
+    --domain="{DOMAIN}" \
+    --config_file="{cfg['CONFIG_FILE_VAL_REPORT']}"
 """
 
         with open(report_slurm, "w") as f:

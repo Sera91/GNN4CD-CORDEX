@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 
+@register_loss("PSD_Loss")
 class PSDLoss(nn.Module):
     """
     PSD loss for single-channel 2D fields.
@@ -26,7 +27,7 @@ class PSDLoss(nn.Module):
         self.use_mse = use_mse
         self.apply_expm1 = apply_expm1
 
-    def __call__(self, pred, target):
+    def forward(self, pred, target):
         B = pred.shape[0] // (self.y_dim * self.x_dim)
         if B == 0:
             pred = pred.view(1, self.y_dim, self.x_dim)

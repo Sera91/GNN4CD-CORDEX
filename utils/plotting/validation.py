@@ -1,12 +1,15 @@
 import pickle
 import torch
 import numpy as np
-
-from utils.plotting import plot_maps, plot_pdf, get_cmap_dict
 import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
 import matplotlib
 import wandb
+
+import os
+os.environ["CARTOPY_DATA_DIR"] = "/leonardo_work/ICT26_ESP/vblasone/cartopy/"
+import cartopy.crs as ccrs
+
+from .plots import get_cmap_dict, plot_maps, plot_pdf
 
 def create_validation_plots(
     y_pred_plot,
@@ -15,14 +18,11 @@ def create_validation_plots(
     lat,
     target_type,
     meta,
-    binmax=350,
     ):
 
-    y_pred_pdf = y_pred_plot.flatten()
-    y_pdf = y_plot.flatten()
-    binmin = min(np.floor(np.min(y_pred_plot)), np.floor(np.min(y_plot))) - 5
-    binmax = max(np.ceil(np.max(y_pred_plot)), np.ceil(np.min(y_plot))) + 5
-    bins = np.arange(binmin,binmax,1).astype(np.float32)
+    #-------------#
+    #---- AVG ----#
+    #-------------#
 
     cmap_dict = get_cmap_dict()
     bounds_avg = [0, 1, 1.5, 2, 4, 6, 8, 10, 12] #, 15, 20] #, 25, 30, 35]
@@ -30,8 +30,6 @@ def create_validation_plots(
 
     gnn4cd_avg = np.nanmean(y_pred_plot, axis=-1)
     target_avg = np.nanmean(y_plot, axis=-1)
-
-    bias =  gnn4cd_avg - target_avg
 
     if meta[target_type]["cmap"] == "cmap_dict['avg']['cmap']":
         cmap = cmap_dict['avg']['cmap']
@@ -65,6 +63,12 @@ def create_validation_plots(
         cbar_ax_lim=[0.93,0.23,0.015,0.55]
     )
 
+    #--------------#
+    #---- BIAS ----#
+    #--------------#
+
+    bias =  gnn4cd_avg - target_avg
+
     fig_bias = plot_maps(
         lon,
         lat,
@@ -91,6 +95,26 @@ def create_validation_plots(
         proj=ccrs.PlateCarree(),
         cbar_ax_lim=[0.93,0.23,0.015,0.55]
     )
+
+    #-------------#
+    #---- PDF ----#
+    #-------------#
+
+    y_pred_pdf = y_pred_plot.flatten()
+    y_pdf = y_plot.flatten()
+
+    # binmin
+    binmin = meta[target_type]["binmin"]
+    if binmin is None:
+        binmin = min(np.floor(np.min(y_pred_plot)), np.floor(np.min(y_plot))) - 5
+        
+    # binmax
+    binmax = meta[target_type]["binmax"]
+    if binmax is None:
+        binmax = max(np.ceil(np.max(y_pred_plot)), np.ceil(np.min(y_plot))) + 5
+
+    # bins
+    bins = np.arange(binmin,binmax,meta[target_type]["binwidth"]).astype(np.float32)
 
     hist_vals, bins = np.histogram(y_pred_pdf, bins=bins, density=False)
     bins_mid = (bins[:-1] + bins[1:]) / 2
