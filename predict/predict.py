@@ -106,7 +106,7 @@ if __name__ == '__main__':
 
     cfg = detect_predictions_idxs_config(args)
 
-    test_idxs, test_idxs_valid, test_idxs_valid_subset = compute_test_indices(
+    test_idxs, test_idxs_valid, test_idxs_valid_subset = compute_predictions_idxs(
         cfg,
         time_index,
         args.history_length,
@@ -114,8 +114,8 @@ if __name__ == '__main__':
     )
 
     if accelerator.is_main_process:
-        print(f"Output (start_idx, end_idx): {test_start_idx, test_end_idx}" +
-        f" corresponding to {time_index[test_start_idx], time_index[test_end_idx-1]}")
+        print(f"Output (start_idx, end_idx): {test_idxs_valid[0], test_idxs_valid[-1]}" +
+        f" corresponding to {time_index[test_idxs_valid[0]], time_index[test_idxs_valid[-1]]}")
 
     #-- Slice time index and target
     time_index_test = time_index[test_idxs]

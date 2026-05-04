@@ -6,7 +6,7 @@ sbatch << EOT
 #!/bin/bash
 #SBATCH -A ${ACCOUNT}
 #SBATCH -p ${PARTITION}
-# SBATCH --qos=${QOS} # boost_qos_dbg
+#SBATCH --qos=${QOS} # boost_qos_dbg
 #SBATCH --time=${TIME}       # format: HH:MM:SS
 #SBATCH -N 1                  # 1 node
 #SBATCH --mem=${MEM}
@@ -51,7 +51,6 @@ ${USE_ACCELERATE} \
 --batch_size=1 \
 --model_name=${MODEL_NAME} \
 --seed=${SEED} \
---test_idxs_file=${TEST_IDXS_FILE} \
 --train_path=${TRAIN_PATH} \
 --epoch=${EPOCH} \
 --checkpoint=${CHECKPOINT} \
