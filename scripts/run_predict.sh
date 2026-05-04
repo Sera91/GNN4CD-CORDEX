@@ -64,8 +64,7 @@ ${USE_ACCELERATE} \
 --metadata_file=${METADATA_FILE} \
 --loss_name=${LOSS_NAME} \
 --history_length=${HISTORY_LENGTH} \
---threshold=${THRESHOLD} \
-${MAKE_PLOTS}
+--threshold=${THRESHOLD}
 
 python ./utils/plotting/plot_report.py \
 --input_path=${OUTPUT_PATH} \

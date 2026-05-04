@@ -15,13 +15,21 @@ from data.datasets.graph_dataset import Graph_Dataset, custom_collate_fn_graph
 
 from models.build_model import build_model
 from models.add_model_specific_args import add_model_specific_args
-from utils.helpers.tools import date_to_idxs_from_timeindex, set_seed_everything
-from utils.helpers.tools import write_log
+
+from utils.helpers.tools import (
+    set_seed_everything,
+    write_log,
+    date_to_idxs_from_timeindex,
+    compute_predictions_idxs
+)
+
 from utils.predictions.predictor import Predictor
+from utils.predictions.detect_predictions_idxs_config import detect_predictions_idxs_config
 from utils.extractors.extract_prediction import extract_prediction
 from utils.predictand_transforms.inverse_transform_predictand import inverse_transform_predictand
 from utils.predictor_transforms.transform_predictors import transform_predictors
 from utils.losses.registry import LOSS_REGISTRY
+
 from predict.add_base_args import add_base_args
 from predict.add_target_specific_args import add_target_specific_args
 
@@ -96,47 +104,14 @@ if __name__ == '__main__':
 #---------------------- INDICES  ---------------------
 #-----------------------------------------------------
 
-    #-- Test indices
-    if args.test_years == "":
-        write_log(f"\nStart year-month-day and end year-month-day have been provided.", args, accelerator, 'a')
-        # Input and predictions
-        test_start_idx, test_end_idx = date_to_idxs_from_timeindex(
-            year_start=args.test_year_start, month_start=args.test_month_start, day_start=args.test_day_start,
-            year_end=args.test_year_end, month_end=args.test_month_end, day_end=args.test_day_end,
-            time_index=time_index)
-        
-        if test_start_idx - args.history_length >= 0:
-            test_idxs = np.arange(test_start_idx - args.history_length, test_end_idx)
-            test_idxs_valid = np.arange(test_start_idx, test_end_idx)
-            test_idxs_valid_subset = np.where(np.isin(test_idxs, test_idxs_valid))[0]
-        else:
-            raise ValueError(f"Invalid start date: {args.test_year_start}/{args.test_month_start}/{args.test_day_start}")
-    else:
-        write_log(f"\nA list of test years have been provided.", args, accelerator, 'a')
-        test_idxs_list = []
-        test_idxs_valid_list = []
-        test_idxs_list = []
-        # Convert "year1_year2_year3_year4" → [year1, year2, year3, year4]
-        years = sorted([int(y) for y in args.test_years.split("_")])
-        for year in years:
-            test_start_idx, test_end_idx = date_to_idxs_from_timeindex(
-                year_start=year, month_start=1, day_start=1,
-                year_end=year, month_end=12, day_end=31,
-                time_index=time_index
-            )
-            if test_start_idx - args.history_length < 0:
-                test_start_idx = args.history_length
-                write_log(f"\nFor year {year} test starts from {time_index[test_start_idx]}", args, accelerator, 'a')
-            # indices of output
-            test_idxs_list.append(np.arange(test_start_idx - args.history_length, test_end_idx))
-            # indices of input
-            test_idxs_valid_list.append(np.arange(test_start_idx, test_end_idx))
-        
-        test_idxs = np.concatenate(test_idxs_list)
-        test_idxs_valid = np.concatenate(test_idxs_valid_list)
+    cfg = detect_predictions_idxs_config(args)
 
-        # indices of input but referred to test_idxs_valid
-        test_idxs_valid_subset = np.where(np.isin(test_idxs, test_idxs_valid))[0]
+    test_idxs, test_idxs_valid, test_idxs_valid_subset = compute_test_indices(
+        cfg,
+        time_index,
+        args.history_length,
+        date_to_idxs_from_timeindex
+    )
 
     if accelerator.is_main_process:
         print(f"Output (start_idx, end_idx): {test_start_idx, test_end_idx}" +

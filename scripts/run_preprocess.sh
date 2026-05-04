@@ -1,8 +1,8 @@
 #!/bin/bash
 source $1
 
-mkdir -p ${OUTPUT_PATH_PHASE_2}
-LOG_PATH=${OUTPUT_PATH_PHASE_2}
+mkdir -p ${OUTPUT_PATH}
+LOG_PATH=${OUTPUT_PATH}
 
 sbatch << EOT
 #!/bin/bash
@@ -19,7 +19,8 @@ sbatch << EOT
 #SBATCH -o ${LOG_PATH}/run.out
 #SBATCH -e ${LOG_PATH}/run.err
 
-module purge
+source ${SOURCE_PATH}
+
 module load --auto profile/deeplrn
 module load gcc
 module load cuda/11.8
@@ -38,15 +39,8 @@ python -m preprocess.preprocess \
 --predictors_file=${PREDICTORS_FILE} \
 --mask_sealand_file=${MASK_SEALAND_FILE} \
 --topo_file=${TOPO_FILE} \
---output_path=${OUTPUT_PATH_PHASE_2} \
+--output_path=${OUTPUT_PATH} \
 --log_file=${LOG_FILE} \
---lon_min=${LON_MIN} \
---lon_max=${LON_MAX} \
---lat_min=${LAT_MIN} \
---lat_max=${LAT_MAX} \
---input_files_suffix_low=${INPUT_FILES_SUFFIX_LOW} \
---predictors_dataset=${PREDICTORS_DATASET} \
---target_dataset=${TARGET_DATASET} \
 --lon_grid_radius_high=${LON_GRID_RADIUS_HIGH} \
 --lat_grid_radius_high=${LAT_GRID_RADIUS_HIGH} \
 --mask_path=${MASK_PATH} \

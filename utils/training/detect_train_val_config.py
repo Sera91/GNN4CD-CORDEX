@@ -1,7 +1,7 @@
 from datetime import date
 import random
 
-def detect_train_val_config(args):
+def detect_train_val_idxs_config(args):
     """
     Normalize all train/val configuration scenarios into a unified structure.
     """
@@ -27,7 +27,7 @@ def detect_train_val_config(args):
             "val_years": val_years
         }
 
-    # Case 3: date range + validation year
+    # Case 3: explicit date range + validation year
     train_start = date(
         int(args.train_year_start),
         int(args.train_month_start),

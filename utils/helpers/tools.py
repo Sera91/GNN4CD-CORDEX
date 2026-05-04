@@ -192,7 +192,7 @@ def find_not_all_nan_times(data, L=24, args=None, accelerator=None):
     return idxs_not_all_nan
 
 
-def derive_train_val_idxs_years_list(
+def derive_train_val_idxs_from_years_list(
     train_years,
     val_years,
     history_length,
@@ -454,6 +454,57 @@ def derive_train_val_idxs(
                 np.save(args.output_path+"val_time_index.npy", time_index[val_idxs])
 
     return train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset
+
+
+def compute_predictions_idxs(cfg, time_index, history_length, date_to_idxs_fn):
+    """
+    Given a normalized test config, compute:
+    - test_idxs
+    - test_idxs_valid
+    - test_idxs_valid_subset
+    """
+
+    # Case 1 — list of years
+    if cfg["mode"] == "years_list":
+        test_idxs_list = []
+        test_idxs_valid_list = []
+
+        for year in cfg["years"]:
+            start_idx, end_idx = date_to_idxs_fn(
+                year_start=year, month_start=1, day_start=1,
+                year_end=year, month_end=12, day_end=31,
+                time_index=time_index
+            )
+
+            # ensure history_length safety
+            if start_idx - history_length < 0:
+                start_idx = history_length
+
+            test_idxs_list.append(np.arange(start_idx - history_length, end_idx))
+            test_idxs_valid_list.append(np.arange(start_idx, end_idx))
+
+        test_idxs = np.concatenate(test_idxs_list)
+        test_idxs_valid = np.concatenate(test_idxs_valid_list)
+
+        test_idxs_valid_subset = np.where(np.isin(test_idxs, test_idxs_valid))[0]
+
+        return test_idxs, test_idxs_valid, test_idxs_valid_subset
+
+    # Case 2 — date range
+    start_idx, end_idx = date_to_idxs_fn(
+        year_start=cfg["start"].year, month_start=cfg["start"].month, day_start=cfg["start"].day,
+        year_end=cfg["end"].year,   month_end=cfg["end"].month,   day_end=cfg["end"].day,
+        time_index=time_index
+    )
+
+    if start_idx - history_length < 0:
+        raise ValueError(f"Invalid test start date: {cfg['start']}")
+
+    test_idxs = np.arange(start_idx - history_length, end_idx)
+    test_idxs_valid = np.arange(start_idx, end_idx)
+    test_idxs_valid_subset = np.where(np.isin(test_idxs, test_idxs_valid))[0]
+
+    return test_idxs, test_idxs_valid, test_idxs_valid_subset
 
 
 def inspect_model(model, args, accelerator):

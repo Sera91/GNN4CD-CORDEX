@@ -15,51 +15,15 @@ from data.structures.graph import derive_edge_index_within, derive_edge_index_mu
 from data.loaders.complete_loader import load_dataset_CORDEXML
 from data.loaders.netcdf_loader import read_dataset
 
+from preprocess.add_base_args import add_base_args
+
+
+#-----------------------------------------------------
+#-------------- PRELIMINARY OPERATIONS ---------------
+#-----------------------------------------------------
+
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-#-- paths
-parser.add_argument('--output_path', type=str)
-parser.add_argument('--log_file', type=str)
-parser.add_argument('--input_path_target', type=str)
-parser.add_argument('--input_path_predictors', type=str)
-parser.add_argument('--input_path_topo', type=str)
-parser.add_argument('--input_path_mask_sealand', type=str)
-parser.add_argument('--target_file', type=str)
-parser.add_argument('--predictors_file', type=str)
-parser.add_argument('--topo_file', type=str)
-parser.add_argument('--mask_sealand_file', type=str)
-parser.add_argument('--land_use_path', type=str)
-parser.add_argument('--land_use_file', type=str)
-
-#-- lat lon grid values
-parser.add_argument('--lon_min', type=float)
-parser.add_argument('--lon_max', type=float)
-parser.add_argument('--lat_min', type=float)
-parser.add_argument('--lat_max', type=float)
-parser.add_argument('--lon_grid_radius_high', type=float)
-parser.add_argument('--lat_grid_radius_high', type=float)
-parser.add_argument('--lon_grid_radius_low', type=float, default=0.36)
-parser.add_argument('--lat_grid_radius_low', type=float, default=0.36)
-
-#-- other
-parser.add_argument('--mask_path', type=str, default=None)
-parser.add_argument('--mask_file', type=str, default=None)
-parser.add_argument('--predictors_dataset', type=str)
-parser.add_argument('--target_dataset', type=str)
-parser.add_argument('--target_type', type=str, default="precipitation")
-parser.add_argument('--target_multiplier', type=float, default=1)
-
-parser.add_argument('--low_transformed_time_res', type=str, default="1h")
-parser.add_argument('--high_transformed_time_res', type=str, default="1h")
-
-#-- era5
-parser.add_argument('--input_files_suffix_low', type=str, help='suffix for the input files (convenction: {parameter}{suffix}.nc)', default='')
-parser.add_argument('--n_levels_low', type=int, help='number of pressure levels considered', default=5)
-
-
-######################################################
-##------------- PRELIMINARY OPERATIONS -------------##
-######################################################
+parser = add_base_args(parser)
 
 args = parser.parse_args()
 
@@ -71,9 +35,9 @@ load_dataset = load_dataset_CORDEXML
 
 write_log(f"Input path: {args.input_path_predictors}", args, accelerator=None, mode='w')
 
-######################################################
-##---------- PREPROCESSING LOW RES DATA ------------##
-######################################################
+#-----------------------------------------------------
+#----------- PREPROCESSING LOW RES DATA --------------
+#-----------------------------------------------------
 
 write_log(f"\n\n#### Preprocessing of the low resolution data.", args, accelerator=None, mode='a')
 
@@ -96,16 +60,15 @@ lat_low, lon_low = np.meshgrid(lat_low, lon_low, indexing='ij')
 lat_low = lat_low.flatten()
 lon_low = lon_low.flatten()
 
-#### IMPORTANT CHANGE - NORMALIZATION NOW IN MAIN AND PREDICTION #### 
 input_ds = np.transpose(input_ds, (3, 4, 0, 1, 2)) #torch.permute(input_ds, (3,4,0,1,2)) # lat, lon, time, vars, levels
 input_ds = input_ds.reshape(-1, *input_ds.shape[2:]) #input_ds = torch.flatten(input_ds, end_dim=1)   # num_nodes, time, vars, levels
 # input_ds = torch.flatten(input_ds, start_dim=2, end_dim=-1)
 
 write_log(f'\nPreprocessing of low resolution data finished.', args, accelerator=None, mode='a')
 
-######################################################
-##--------- PREPROCESSING HIGH RES DATA ------------##
-######################################################
+#-----------------------------------------------------
+#---------- PREPROCESSING HIGH RES DATA --------------
+#-----------------------------------------------------
 
 write_log(f'\n\n#### Preprocessing of the high resolution data.', args, accelerator=None, mode='a')
 
@@ -183,9 +146,9 @@ num_nodes_high = lon_high.shape[0]
 
 write_log(f"\nThe high resolution graph has {num_nodes_high} nodes.", args, accelerator=None, mode='a')
 
-######################################################
-##-------------- BUILDING THE GRAPH ----------------##
-######################################################
+#-----------------------------------------------------
+#--------------- BUILDING THE GRAPH ------------------
+#-----------------------------------------------------
 
 write_log(f"\n\n#### Creating the graph object.", args, accelerator=None, mode='a')
 

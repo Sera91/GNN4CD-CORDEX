@@ -27,11 +27,11 @@ from utils.helpers.tools import (
     set_seed_everything,
     find_not_all_nan_times,
     derive_train_val_idxs,
-    derive_train_val_idxs_years_list,
+    derive_train_val_idxs_from_years_list,
 )
 
 # Training
-from utils.training.detect_train_val_config import detect_train_val_config
+from utils.training.detect_train_val_idxs_config import detect_train_val_idxs_config
 from utils.training.trainer import Trainer
 from train.add_base_args import add_base_args
 
@@ -122,12 +122,12 @@ if __name__ == '__main__':
 #-------------------  TRAIN/VAL IDXS --------------------
 #--------------------------------------------------------
 
-    cfg = detect_train_val_config(args)
+    cfg = detect_train_val_idxs_config(args)
 
     # Case 1 and 2: year-based logic
     if cfg["mode"] in ("years_list", "random_years"):
         train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = \
-            derive_train_val_idxs_years_list(
+            derive_train_val_idxs_from_years_list(
                 cfg["train_years"],
                 cfg["val_years"],
                 history_length=args.history_length,
