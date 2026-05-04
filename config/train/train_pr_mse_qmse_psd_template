@@ -13,14 +13,11 @@ MAIL=""
 LOG_PATH=""
 N_GPU="1"
 SEED=100
-MODEL_NAME="GNN4CD_Model"
 TARGET_TYPE="precipitation"
-LR_SCHEDULER="StepLR"
 
 #------------------#
 # WANDB PARAMETERS #
 #------------------#
-
 WANDB_PROJECT_NAME=""
 WANDB_API_KEY=""
 WANDB_USERNAME=""
@@ -52,6 +49,7 @@ COLLATE_NAME="custom_collate_fn_graph"
 #------------------#
 # MODEL PARAMETERS #
 #------------------#
+MODEL_NAME="GNN4CD_Model"
 HISTORY_LENGTH=2 # days
 
 #-----------------#
@@ -77,8 +75,9 @@ PREDICTOR_HIGH_TRANSFORM_MODE="zscore_high_independent" # zscore per field, inde
 #---------------------#
 EPOCHS=150
 BATCH_SIZE=64
-LR_STEP_SIZE=25
 LR=0.001
+LR_SCHEDULER="StepLR"
+LR_STEP_SIZE=25
 WEIGHT_DECAY=0.0
 
 CTD_TRAINING=false
@@ -94,6 +93,16 @@ VAL_PLOT_CONFIG="${MAIN_PATH}/config/plot/CORDEXML_plot_params_${DOMAIN}.json"
 #-----------------#
 # TRAINING PERIOD #
 #-----------------#
+## Using Case 1: explicit year lists
+# TRAIN_YEARS=( $(seq 1961 1979) )
+# VAL_YEARS=( $(seq 1980) )
+
+## Using Case 2: random sampling from a year range
+# FIRST_YEAR="1961"
+# LAST_YEAR="1980"
+# N_VAL_YEARS="1"
+
+## Using Case 3: date range + validation year
 TRAIN_YEAR_START=1961
 TRAIN_MONTH_START=1
 TRAIN_DAY_START=3
@@ -103,12 +112,6 @@ TRAIN_DAY_END=29
 VALIDATION_YEAR=1980
 
 #--------------do not change here below------------------
-
-TRAIN_YEARS=""
-VAL_YEARS=""
-FIRST_YEAR=""
-LAST_YEAR=""
-N_VAL_YEARS=""
 
 if [ ${USE_ACCELERATE} = true ] ; then
 	USE_ACCELERATE="--use_accelerate"

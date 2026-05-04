@@ -31,6 +31,7 @@ from utils.helpers.tools import (
 )
 
 # Training
+from utils.training.detect_train_val_config import detect_train_val_config
 from utils.training.trainer import Trainer
 from train.add_base_args import add_base_args
 
@@ -121,54 +122,34 @@ if __name__ == '__main__':
 #-------------------  TRAIN/VAL IDXS --------------------
 #--------------------------------------------------------
 
-    #-- Step 1 - Find valid time indices
-    idxs_not_all_nan = find_not_all_nan_times(
-        data=target,
-        L=args.history_length,
-        args=args,
-        accelerator=accelerator
-        )
+    cfg = detect_train_val_config(args)
 
-    #-- Step 2 - Compute train/val indices
-    # Case 1: the user provides lists of train years and val years
-    write_log(f"\nargs.train_years: {args.train_years.split(' ')}\nargs.val_years: {args.val_years.split(' ')}", args, accelerator, 'a')
-    if args.train_years != "" and args.val_years != "":
-        train_years = [int(y) for y in args.train_years.split(' ')]
-        val_years = [int(y) for y in args.val_years.split(' ')]
-        train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = derive_train_val_idxs_years_list(
-            train_years,
-            val_years,
-            history_length=args.history_length,
-            time_index=time_index,
-            args=args,
-            accelerator=accelerator
-        )
-    elif args.first_year != "" and args.last_year != "":
-        # Build the full range
-        all_years = list(range(int(args.first_year), int(args.last_year) + 1))
-        # Randomly sample validation years
-        val_years = random.sample(all_years, int(args.n_val_years))
-        # Training years are the complement
-        train_years = [y for y in all_years if y not in val_years]
-        train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = derive_train_val_idxs_years_list(
-            train_years,
-            val_years,
-            history_length=args.history_length,
-            time_index=time_index,
-            args=args,
-            accelerator=accelerator
-        )
+    # Case 1 and 2: year-based logic
+    if cfg["mode"] in ("years_list", "random_years"):
+        train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = \
+            derive_train_val_idxs_years_list(
+                cfg["train_years"],
+                cfg["val_years"],
+                history_length=args.history_length,
+                time_index=time_index,
+                args=args,
+                accelerator=accelerator
+            )
+
+    # Case 3: date-based logic
     else:
-        train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = derive_train_val_idxs(
-            int(args.train_year_start), int(args.train_month_start), int(args.train_day_start),
-            int(args.train_year_end), int(args.train_month_end), int(args.train_day_end),
-            history_length=args.history_length,
-            time_index=time_index,
-            idxs_not_all_nan=idxs_not_all_nan,
-            validation_year=int(args.validation_year),
-            args=args,
-            accelerator=accelerator
-        )
+        train_idxs, train_idxs_valid_subset, val_idxs, val_idxs_valid_subset = \
+            derive_train_val_idxs(
+                cfg["train_start"].year, cfg["train_start"].month, cfg["train_start"].day,
+                cfg["train_end"].year,   cfg["train_end"].month,   cfg["train_end"].day,
+                history_length=args.history_length,
+                time_index=time_index,
+                idxs_not_all_nan=idxs_not_all_nan,
+                validation_year=cfg["validation_year"],
+                args=args,
+                accelerator=accelerator
+            )
+
 
     np.save(args.output_path + "train_idxs.npy", train_idxs)
     np.save(args.output_path + "train_idxs_valid_subset.npy", train_idxs_valid_subset)
