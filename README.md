@@ -1,6 +1,6 @@
 ## GNN4CD-CORDEXML - branch Experiments_Valentina
 
-This folder contains the code to reproduce the current "best runs" for ALPS.
+This folder contains the code to reproduce the current "best runs" for the CORDEX-ML benchmark.
 
 In the following, the used configurations are summarized. All these configurations are
 already specified in the config files or directly implemented in the code.
@@ -32,8 +32,20 @@ already specified in the config files or directly implemented in the code.
 - matrix coordinates ij (already normalized in [-1,1])
 
 **Training parameters**
+We adapted the same loss for all the regional domains
 - loss: GaussianNLLLoss
+- time lag: 2 days
+
+but we changed training hyperparameters for each domain.
+For ALPS we used:
 - n epochs = 150
 - initial lr: 0.001
 - lr scheduler: StepLR, step_size=25 epochs, gamma=0.5
-- time lag: 2 days
+
+
+For the NZ domain we used:
+- n epochs = 162
+- initial lr: 0.001
+- lr scheduler: StepLR, step_size=25 epochs, gamma=0.5
+
+For SA domain we used:
