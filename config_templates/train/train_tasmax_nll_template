@@ -29,6 +29,7 @@ SOURCE_PATH=""
 ENV_PATH=""
 MAIN_PATH=""
 ACCELERATE_CONFIG_PATH=""
+CARTOPY_DATA_DIR="/leonardo_work/ICT26_ESP/vblasone/cartopy/"
 
 #-------------------------------#
 # INPUT/OUTPUT FILES PARAMETERS #
