@@ -1,6 +1,9 @@
-# Instructions
+# Intro
+This repo contains the code developed to run the GNN4CD model for the CORDEX-ML benchmark.
 
-## Setting enviroment
+
+# Instructions to run on Leonardo
+
 To run the model training/inference you need to setup all the required configuration for accelerate and wandb.
 First of all, you need to load the required modules on Leonardo:
 
