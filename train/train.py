@@ -12,10 +12,8 @@ from accelerate import Accelerator
 # Models
 from models.build_model import build_model
 from models.add_model_specific_args import add_model_specific_args
-from models.registry import MODEL_REGISTRY
 
 # Losses
-from utils.losses.registry import LOSS_REGISTRY
 from utils.losses.build_loss import build_loss
 from utils.losses.add_loss_specific_args import add_loss_specific_args
 from utils.losses.qmse import derive_qmse_bins
