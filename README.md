@@ -1,4 +1,4 @@
-## GNN4CD-CORDEXML - branch Experiments_Valentina
+## GNN4CD-CORDEXML - branch Experiments
 
 This folder contains the code to reproduce the current "best runs" for the CORDEX-ML benchmark.
 
