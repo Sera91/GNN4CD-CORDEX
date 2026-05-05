@@ -1,4 +1,4 @@
-## GNN4CD-CORDEXML - branch Refactoring_Valentina
+## GNN4CD-CORDEXML - branch Refactoring
 
 This folder contains the refactored code. Main modifications:
 
