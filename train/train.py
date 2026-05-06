@@ -407,7 +407,7 @@ if __name__ == '__main__':
         times=time_index[val_idxs][val_idxs_valid_subset],
         accelerator=accelerator,
         args=args,
-        epoch_start=0
+        epoch_start=epoch_start
     )
 
     end = time.time()

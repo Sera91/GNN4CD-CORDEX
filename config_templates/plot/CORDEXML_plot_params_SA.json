@@ -14,6 +14,7 @@
         "tail_ylim": "[10**-7, 10**-5]",
         "tail_lim": 10,
         "cmap": "cmap_dict['avg']['cmap']",
+        "cmap_bias": "BrBG",
         "tail_zoom": "True",
         "xlim_pdf": "None",
         "plot_func_pdf": "scatter",
