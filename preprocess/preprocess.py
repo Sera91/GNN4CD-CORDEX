@@ -82,22 +82,35 @@ else:
     write_log(f"Target time-resolution is {high_time_res} ... ", args, accelerator=None, mode='a')
 
     if args.target_type == "precipitation":
-        target_high = target_ds.pr.to_numpy()
+        try:
+            target_high = target_ds.pr.to_numpy()
+        except:
+            target_high = target_ds.tp.to_numpy()
     elif args.target_type == "temperature":
-        target_high = target_ds.tasmax.to_numpy()
+        try:
+            target_high = target_ds.tasmax.to_numpy()
+        except:
+            target_high = target_ds.t2m.to_numpy()
 
     if args.target_multiplier is not None: 
         target_high *= args.target_multiplier
         write_log(f'\n\tMultiplying pr by {args.target_multiplier} to get the correct unit.', args, accelerator=None, mode='a')
 
-    lon_high = target_ds.lon.to_numpy()
-    lat_high = target_ds.lat.to_numpy()
+    try:
+        lon_high = target_ds.lon.to_numpy()
+        lat_high = target_ds.lat.to_numpy()
+    except:
+        lon_high = target_ds.longitude.to_numpy()
+        lat_high = target_ds.latitude.to_numpy()
 
 # 2. Orography
 write_log(f"\n-- 2. OROGRAPHY ", args, accelerator=None, mode='a')
 orog_ds = xr.open_dataset(args.input_path_topo + args.topo_file)
 
-orog = orog_ds.orog.to_numpy()
+try:
+    orog = orog_ds.orog.to_numpy()
+except:
+    orog = orog_ds.z.to_numpy()
 
 if target_high is None:
     lon_high = orog_ds.lon.to_numpy()
@@ -121,7 +134,6 @@ i = 2.0 * i / (lon_high.shape[0] - 1) - 1.0 # normalise in [-1,1]
 j = 2.0 * j / (lon_high.shape[1] - 1) - 1.0
 
 coords = np.stack([i, j], axis=-1).reshape(-1, 2)
-np.save(args.output_path+"coords_ij.npy", coords)
 
 # 5. Land use
 write_log(f"\n-- 5. LAND USE - ignoring", args, accelerator=None, mode='a')
