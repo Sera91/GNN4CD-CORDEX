@@ -21,19 +21,19 @@ def add_base_args(parser):
     parser.add_argument('--lat_max', type=float)
     parser.add_argument('--lon_grid_radius_high', type=float)
     parser.add_argument('--lat_grid_radius_high', type=float)
-    parser.add_argument('--lon_grid_radius_low', type=float, default=0.36)
-    parser.add_argument('--lat_grid_radius_low', type=float, default=0.36)
+    parser.add_argument('--lon_grid_radius_low', type=float)
+    parser.add_argument('--lat_grid_radius_low', type=float)
 
     #-- other
     parser.add_argument('--mask_path', type=str, default=None)
     parser.add_argument('--mask_file', type=str, default=None)
     parser.add_argument('--predictors_dataset', type=str)
     parser.add_argument('--target_dataset', type=str)
-    parser.add_argument('--target_type', type=str, default="precipitation")
+    parser.add_argument('--target_type', type=str)
     parser.add_argument('--target_multiplier', type=float, default=1)
 
-    parser.add_argument("--params", type=str, default="q,t,u,v,z", help="Comma-separated list of variable names")
-    parser.add_argument("--levels", type=str, default="850,700,500", help="Comma-separated list of pressure levels")
-    parser.add_argument("--dataset_name", type=str, default="CORDEXML", choices=["CORDEXML", "ERA5", "CMIP6"], help="Name of the dataset loader to use")
+    parser.add_argument("--params", type=str, help="Comma-separated list of variable names")
+    parser.add_argument("--levels", type=str, help="Comma-separated list of pressure levels")
+    parser.add_argument("--dataset_name", type=str, choices=["CORDEXML", "ERA5", "CMIP6"], help="Name of the dataset loader to use")
 
     return parser
