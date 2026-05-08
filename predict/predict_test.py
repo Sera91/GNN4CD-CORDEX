@@ -302,7 +302,7 @@ if __name__ == '__main__':
 
     start = time.time()
     predictor = Predictor()
-    y_out_trans, idxs = predictor.predict(model, dataloader, args=args, accelerator=accelerator)
+    y_pred_raw, idxs_sorted = predictor.predict(model, dataloader, pred_size=len(graph_dataset), args=args, accelerator=accelerator)
     end = time.time()
 
     write_log(f"\nTest Done! \nNow post-processing results.", args, accelerator, 'a')
@@ -311,26 +311,9 @@ if __name__ == '__main__':
     #------------------ POST-PROCESSING ------------------
     #-----------------------------------------------------
 
-    y_pred_trans = extract_prediction(y_out_trans, loss_name=args.loss_name)
-
     # from raw model prediction to actual pr/tasmax values
     predictand_stats = np.load(args.train_path + "predictand_stats.npz", allow_pickle=True)
-    y_pred = inverse_transform_predictand(y_pred_trans, predictand_stats)
-
-    if accelerator is not None:
-        accelerator.wait_for_everyone()
-
-        # Gather the values in *tensor* across all processes and concatenate them on the first dimension. Useful to
-        # regroup the predictions from all processes when doing evaluation.
-        idxs = accelerator.gather(idxs)[: len(graph_dataset)]
-        idxs, indices = torch.sort(idxs)
-        idxs = idxs.cpu().numpy()
-        indices = indices.cpu().numpy()
-
-        y_pred = accelerator.gather(y_pred)[: len(graph_dataset),:] # (times, nodes)
-        y_pred = y_pred.swapaxes(0,1).cpu().numpy()[:,indices] # (nodes, times)
-        print(f"[Rank {accelerator.process_index}] y_pred.shape (after gather): {y_pred.shape}")
-        
+    y_pred = inverse_transform_predictand(y_pred_raw, predictand_stats)
 
     if args.target_type == "precipitation":
         y_pred[y_pred < args.threshold] = 0.0
@@ -363,7 +346,7 @@ if __name__ == '__main__':
     elif args.target_type == "temperature":
         data.tasmax_gnn4cd = y_pred    
 
-    data.times = time_index_test[idxs]
+    data.times = time_index_test[idxs_sorted]
     data["low"].lat = lat_low
     data["low"].lon = lon_low
     data["high"].lat = lat_high

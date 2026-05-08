@@ -12,8 +12,8 @@ class Gaussian_NLL_Loss(nn.Module):
         self.eps = eps
 
     def forward(self, y_out, target):
-        mu = y_out[..., 0]
-        sigma_raw = y_out[..., 1]
+        mu = y_out[:, 0]
+        sigma_raw = y_out[:, 1]
 
         # enforce positivity
         sigma = torch.nn.functional.softplus(sigma_raw) + self.eps
